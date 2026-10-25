@@ -1,0 +1,8 @@
+# GGUF
+model.gguf
+
+# Python Embeddings
+/python_embed
+
+# Big File
+koboldcpp.exe
