@@ -79,8 +79,12 @@ function Enable-EmbeddedSitePackages($RuntimeDirectory) {
     $contents = [IO.File]::ReadAllText($pthFile.FullName)
     if ($contents -notmatch "(?m)^import site\s*$") {
         $contents = [regex]::Replace($contents, "(?m)^#\s*import site\s*$", "import site")
-        [IO.File]::WriteAllText($pthFile.FullName, $contents)
     }
+    if ($contents -notmatch "(?m)^\.\.\s*$") {
+        $contents = [regex]::Replace($contents, "\s*$", "") +
+            [Environment]::NewLine + ".." + [Environment]::NewLine
+    }
+    [IO.File]::WriteAllText($pthFile.FullName, $contents)
 }
 
 function Install-PythonRuntime {
