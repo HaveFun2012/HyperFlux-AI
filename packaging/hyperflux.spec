@@ -25,6 +25,18 @@ a = Analysis(
     excludes=["tkinter", "unittest"],
     noarchive=False,
 )
+
+# The interface uses Qt WebEngine Widgets, not Qt Quick. The automatic Qt hooks
+# collect optional Qt Quick tooling and generated build artifacts that are not
+# used by this app and can exceed Windows installer path limits.
+def is_qt_quick_data(entry):
+    target = entry[0].replace("\\", "/").casefold()
+    return target.startswith("pyside6/qml/")
+
+
+a.datas = [entry for entry in a.datas if not is_qt_quick_data(entry)]
+a.binaries = [entry for entry in a.binaries if not is_qt_quick_data(entry)]
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
