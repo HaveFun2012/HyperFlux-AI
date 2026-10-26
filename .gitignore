@@ -1,8 +1,16 @@
-# GGUF
-model.gguf
+# Downloaded runtime assets
+/python_embed/
+/koboldcpp*.exe
+*.gguf
+/model.gguf.download
+/koboldcpp.exe.download
 
-# Python Embeddings
-/python_embed
+# Python-generated files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
 
-# Big File
-koboldcpp.exe
+# Local user data and temporary files
+/HyperFluxData/
+*.tmp

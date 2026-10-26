@@ -1238,7 +1238,7 @@ def run_terminal():
                     "[user]/restart-ui[/user]  Refresh the UI and keep this session\n"
                     "[dim]Ctrl+Enter adds a line; Backspace at a line start removes it; Enter sends.[/dim]\n"
                     "[user]/exit[/user]  Quit HyperFlux\n\n"
-                    "[dim]Example: /read \"src/main.py\" Find the bug[/dim]\n"
+                    "[dim]Example: /read \"hyperflux_interacter.py\" Find the bug[/dim]\n"
                     "[dim]Normal messages are sent to your local model.[/dim]"
                 )
                 continue

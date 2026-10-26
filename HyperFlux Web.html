@@ -974,7 +974,7 @@ async function searchWithLocalBridge(input) {
     if (error.name === 'AbortError') {
       throw new Error('Web search timed out. Please try a shorter or more focused query.');
     }
-    throw new Error('Local search bridge is unavailable. Start Run_HyperFlux.bat to launch HyperFlux and its search service, then try again.');
+    throw new Error('Local search bridge is unavailable. Start Start_HyperFlux_Server.bat, then try again.');
   } finally {
     clearTimeout(timeout);
   }
@@ -1233,7 +1233,7 @@ function executeLocalCommand(command) {
       '- `/temp <0-2>` — set generation temperature.',
       '- `/length <1-2048>` — set maximum output tokens.',
       '',
-      'Questions asking for current or latest information are also searched automatically. Start Run_HyperFlux.bat to enable the local search service.'
+      'Questions asking for current or latest information are also searched automatically. Start Start_HyperFlux_Server.bat to enable local web search.'
     ].join('\n');
   }
 

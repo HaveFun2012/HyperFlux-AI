@@ -1,0 +1,4 @@
+requests
+rich
+ddgs
+PySide6-Essentials

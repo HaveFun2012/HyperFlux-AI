@@ -1,62 +1,69 @@
 # HyperFlux AI
 
-HyperFlux AI is a Windows-based local AI assistant built around a GGUF model served by KoboldCPP. It brings together a terminal interface, a companion browser UI, local web-search support, and workspace-aware tools in one lightweight setup.
+HyperFlux AI is a local Windows assistant built around a GGUF model served by KoboldCpp. This repository keeps the application source and downloads the large runtime assets during setup instead of syncing them to GitHub.
 
-This project is designed for users who want to run an AI locally without relying on cloud-based services for every interaction.
+## Project components
 
-## Overview
+- `hyperflux_desktop.py` — PySide6 desktop interface.
+- `hyperflux_interacter.py` — preserved terminal interface and reusable chat/search logic.
+- `hyperflux_server.py` — local search bridge for the HTML reference.
+- `HyperFlux Web.html` — retained browser UI reference.
+- `setup_assets.ps1` — downloads runtime assets and installs Python dependencies.
+- `Start_HyperFlux_Server.bat` — starts KoboldCpp and the search bridge separately from either UI.
+- `Run_HyperFlux.bat` — starts the PySide6 desktop UI.
+- `Run_HyperFlux_Terminal.bat` — starts the preserved terminal UI.
 
-HyperFlux AI is a local-first assistant that connects to a model running through Kobold - HyperFlux Server and exposes it through a clean interactive experience. It supports chat, file reading, session memory, web search, and lightweight utility commands.
+Downloaded assets are intentionally ignored by Git:
 
-The project includes:
-- a terminal-based chat interface
-- a companion HTML interface
-- local search bridge support
-- workspace file inspection commands
-- model status and runtime controls
-- safe math handling for quick calculations
+- `python_embed\` — official Python embeddable runtime.
+- `koboldcpp.exe` — official [KoboldCpp GitHub release](https://github.com/LostRuins/koboldcpp/releases).
+- `model.gguf` — Gemma 3 4B IT Q4_K_M GGUF from [`ggml-org/gemma-3-4b-it-GGUF`](https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF) on Hugging Face.
 
-## Current Features
-
-- Local chat with a GGUF model via KoboldCPP
-- Rich terminal UI with embedded status and command support
-- Companion browser interface for a more visual workflow
-- Local web search bridge with fallback search providers
-- Workspace-aware file reading using `/read`
-- Session memory and local knowledge support
-- Runtime commands for help, status, search, temperature, and output length
-- Safe arithmetic evaluation for simple math queries
-- Adjustable generation settings such as temperature and max output length
-- Separate conversation histories between the terminal and HTML interface
-
-## Requirements
-
-Before running HyperFlux AI, make sure the following files are present in the project folder:
-
-- `koboldcpp.exe`
-- `model.gguf`
-- `python_embed\`
-- `Run_HyperFlux.bat`
-- `main.py`
-
-Recommended environment:
-- Windows 10 or Windows 11
-- Local internet access for downloading required assets and web search results
-- A valid GGUF model compatible with KoboldCPP
+The GGUF is a third-party conversion of Google's Gemma model, not a Google-published GGUF. Gemma terms apply; review and accept the applicable model terms before using or redistributing model weights. The setup script verifies the selected GGUF's pinned size and SHA-256.
 
 ## Setup
 
-1. Place the required files in the same project directory as `main.py`.
-2. Make sure `koboldcpp.exe` and `model.gguf` are available at the root of the project.
-3. Confirm that the bundled Python runtime exists inside `python_embed\`.
-4. Ensure the model is compatible with KoboldCPP before starting the app.
+On Windows 10 or 11, with PowerShell and internet access:
 
-> Note: A future improvement would be to add an automatic downloader for `python_embed`, `koboldcpp.exe`, and `model.gguf`.
+1. Clone or download this repository.
+2. In the project folder, run:
 
-## Running the Project
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\setup_assets.ps1
+   ```
 
-### Option 1: Use the launcher
-Double-click:
+   The script downloads Python 3.14.8 from python.org, the latest official KoboldCpp Windows release from GitHub, and the pinned Gemma GGUF from Hugging Face. It then enables `pip` for the embedded runtime and installs packages listed in `requirements.txt`.
 
-```bat
-Run_HyperFlux.bat
+3. If Hugging Face requires authentication for the model, set `HF_TOKEN` in the current PowerShell session and rerun the script:
+
+   ```powershell
+   $env:HF_TOKEN = "your Hugging Face access token"
+   powershell -ExecutionPolicy Bypass -File .\setup_assets.ps1
+   ```
+
+   Do not store a token in the repository or commit it.
+
+4. Start `Start_HyperFlux_Server.bat` to launch KoboldCpp and the search bridge. Then start the desktop application with `Run_HyperFlux.bat`, or use `Run_HyperFlux_Terminal.bat` for the preserved terminal interface.
+
+The setup script downloads approximately 3 GB of model and server assets, in addition to the runtime and dependencies. Ensure adequate disk space and bandwidth. It keeps existing `koboldcpp.exe` and `model.gguf` files by default. Use `-Force` to replace them with the script's official-release KoboldCpp binary and pinned Gemma file. `-KoboldVariant` accepts `standard`, `nocuda`, or `oldpc`.
+
+## Runtime and data
+
+- KoboldCpp model API: `http://localhost:5001`
+- Search bridge API: `http://127.0.0.1:5002`
+- Desktop chat history and settings are stored under `%LOCALAPPDATA%\HyperFlux`.
+- The HTML interface continues to keep its own separate browser `localStorage` history and settings.
+- The terminal and desktop app retain separate chat histories.
+
+The browser HTML file is a reference/client, not embedded in the PySide6 application. It communicates directly with KoboldCpp for generation and uses `hyperflux_server.py` for search. Start the local servers before using either client.
+
+## Python dependencies
+
+`requirements.txt` contains the external packages used by the desktop, terminal and bridge:
+
+- `PySide6-Essentials` — PySide6 Qt widgets used by the desktop app (the lightweight official Qt package).
+- `requests` — local API and online search HTTP requests.
+- `rich` — terminal interface.
+- `ddgs` — preferred optional web-search provider, with HTTP fallbacks in the source.
+
+All other imports in the Python application are from the Python standard library.
