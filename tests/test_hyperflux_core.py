@@ -95,6 +95,16 @@ class HyperFluxCoreTests(unittest.TestCase):
         self.assertEqual(engine.chat_history[-1]["user"], "test prompt")
         self.assertFalse(engine.response_rendered_live)
 
+    def test_custom_system_instruction_replaces_default_prompt(self):
+        with patch.object(HyperFluxEngine, "_load_model_name"):
+            engine = HyperFluxEngine()
+        engine.system_instruction = "Desktop-specific instructions."
+        with patch("hyperflux_interacter.requests.post", return_value=FakeStreamResponse()) as post:
+            engine.query_local_llm("test prompt", quiet=True)
+        prompt = post.call_args.kwargs["json"]["prompt"]
+        self.assertIn("Desktop-specific instructions.", prompt)
+        self.assertNotIn("This terminal interface", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
