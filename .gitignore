@@ -4,6 +4,9 @@
 *.gguf
 /model.gguf.download
 /koboldcpp.exe.download
+/build/
+/dist/
+/packaging/hyperflux.ico
 
 # Python-generated files
 __pycache__/

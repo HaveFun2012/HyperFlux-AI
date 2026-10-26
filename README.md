@@ -68,3 +68,51 @@ The desktop app embeds the same HTML, styles, and JavaScript used by the browser
 - `ddgs` — preferred optional web-search provider, with HTTP fallbacks in the source.
 
 All other imports in the Python application are from the Python standard library.
+
+## Windows release installer
+
+The tagged Windows build creates a PyInstaller `onedir` application bundle and
+wraps it in an Inno Setup installer named `HyperFlux-Setup.exe`. The installer
+does not contain model weights or a KoboldCpp binary. On first launch, the
+setup wizard looks for common local asset locations and lets you browse for an
+existing GGUF/KoboldCpp executable; otherwise it offers the official KoboldCpp
+release and an explicitly selected, checksum-pinned Gemma download. A model is
+never silently substituted. Setup logs are written to
+`%LOCALAPPDATA%\HyperFlux\logs\setup.log`, and user assets/settings are kept
+outside the application install directory.
+
+### Build locally
+
+On 64-bit Windows with Python 3.14.8 and Inno Setup 6 installed:
+
+```powershell
+python -m pip install -r requirements-release.txt
+python packaging\build_icon.py
+python -m PyInstaller --noconfirm --clean packaging\hyperflux.spec
+$env:HYPERFLUX_VERSION = "0.0.0-dev"
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\installer\HyperFlux.iss
+python -m unittest discover -s tests -v
+.\dist\HyperFlux\HyperFlux.exe --smoke-test
+```
+
+The setup workflow runs on a `v*` tag and stores the installer, its SHA-256,
+and generated release notes as a GitHub Actions artifact. It does not create
+or publish a GitHub Release. Review and manually publish the artifact only
+after the packaged smoke test, measured artifact size, release notes, and
+legal notice checks have passed.
+
+### Download and disk-space estimate
+
+The local Windows build measured about **158 MiB** for `HyperFlux-Setup.exe`
+and **609 MiB** for the installed desktop payload. The pinned Gemma model is
+**2,489,758,112 bytes (2.49 GB / 2.32 GiB)**. KoboldCpp is fetched separately
+from its current official release; its size varies by release (the local
+checkout's existing copy is about 607 MiB). Model downloads require a further
+64 MiB free-space margin for safe staging. For a fresh install that downloads
+both assets, reserve roughly **4–5 GB** across installer, installed app, model,
+and KoboldCpp. Existing valid assets avoid their respective downloads.
+
+See [LICENSES.md](./LICENSES.md) for the release-blocking third-party license
+review checklist and [release-notes/TEMPLATE.md](./release-notes/TEMPLATE.md)
+for release notes. Redistribution is not approved until the exact Qt/Chromium,
+KoboldCpp, dependency, and model terms and required notices have been checked.

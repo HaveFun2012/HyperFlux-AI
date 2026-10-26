@@ -1,0 +1,118 @@
+name: Windows release build
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14.8"
+          architecture: x64
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          winget install --id JRSoftware.InnoSetup --exact --version 6.7.3 --silent --accept-package-agreements --accept-source-agreements
+
+      - name: Install pinned build dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-release.txt
+
+      - name: Build application bundle
+        shell: pwsh
+        run: |
+          python packaging/build_icon.py
+          python -m PyInstaller --noconfirm --clean packaging/hyperflux.spec
+
+      - name: Build installer
+        shell: pwsh
+        env:
+          HYPERFLUX_VERSION: ${{ github.ref_name }}
+        run: |
+          $isccCandidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+          )
+          $iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            throw "Inno Setup compiler was not found in the expected installation paths."
+          }
+          & $iscc /Qp packaging\installer\HyperFlux.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+          if (-not (Test-Path dist\HyperFlux-Setup.exe)) {
+            throw "The installer output was not created."
+          }
+
+      - name: Generate release notes and installer checksum
+        env:
+          HYPERFLUX_VERSION: ${{ github.ref_name }}
+        run: python release-notes\generate.py --version "$env:HYPERFLUX_VERSION"
+
+      - name: Run packaged smoke checks
+        shell: pwsh
+        run: |
+          $env:QTWEBENGINE_DISABLE_SANDBOX = "1"
+          $env:QTWEBENGINE_CHROMIUM_FLAGS = "--disable-gpu --no-sandbox"
+          python -m unittest discover -s tests -v
+          if (-not (Test-Path dist\HyperFlux\HyperFlux.exe)) {
+            throw "Packaged application executable is missing."
+          }
+          & dist\HyperFlux\HyperFlux.exe --smoke-test
+          if ($LASTEXITCODE -ne 0) {
+            throw "Packaged application smoke test failed with exit code $LASTEXITCODE."
+          }
+          $installRoot = Join-Path $env:TEMP ("HyperFlux-installer-smoke-" + [guid]::NewGuid().ToString("N"))
+          $installDir = Join-Path $installRoot "app"
+          New-Item -ItemType Directory -Path $installRoot | Out-Null
+          try {
+            $arguments = @(
+              "/DIR=`"$installDir`"",
+              "/VERYSILENT",
+              "/SUPPRESSMSGBOXES",
+              "/NORESTART",
+              "/SP-",
+              "/TASKS=!desktopicon"
+            )
+            $installer = Start-Process -FilePath (Resolve-Path dist\HyperFlux-Setup.exe).Path -ArgumentList $arguments -Wait -PassThru
+            if ($installer.ExitCode -ne 0) {
+              throw "Installer returned exit code $($installer.ExitCode)."
+            }
+            & "$installDir\HyperFlux.exe" --smoke-test
+            if ($LASTEXITCODE -ne 0) {
+              throw "Installed app smoke test failed with exit code $LASTEXITCODE."
+            }
+            $uninstaller = Start-Process -FilePath "$installDir\unins000.exe" -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+            if ($uninstaller.ExitCode -ne 0) {
+              throw "Uninstaller returned exit code $($uninstaller.ExitCode)."
+            }
+          }
+          finally {
+            if (Test-Path -LiteralPath $installRoot) {
+              Remove-Item -LiteralPath $installRoot -Recurse -Force
+            }
+          }
+
+      - name: Upload release candidate (not published)
+        uses: actions/upload-artifact@v4
+        with:
+          name: HyperFlux-Setup-${{ github.ref_name }}
+          path: |
+            dist/HyperFlux-Setup.exe
+            dist/HyperFlux-Setup.exe.sha256
+            dist/RELEASE-NOTES.md
+          if-no-files-found: error
+          retention-days: 30

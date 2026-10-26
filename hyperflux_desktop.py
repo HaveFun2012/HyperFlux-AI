@@ -4,9 +4,10 @@ import json
 import os
 import re
 import sys
+import threading
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QEventLoop, QProcess, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWebEngineCore import (
     QWebEnginePage,
@@ -15,6 +16,7 @@ from PySide6.QtWebEngineCore import (
     QWebEngineSettings,
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtNetwork import QTcpSocket
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 
 
@@ -22,6 +24,12 @@ def data_directory():
     local_app_data = os.environ.get("LOCALAPPDATA")
     root = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
     return root / "HyperFlux"
+
+
+def desktop_logo_path():
+    logo_directory = Path(__file__).resolve().with_name("logo_hyperflux")
+    desktop_logo = logo_directory / "hyperfluxdesktop.png"
+    return desktop_logo if desktop_logo.is_file() else logo_directory / "dark5.4.png"
 
 
 def _read_legacy_settings(path):
@@ -122,13 +130,19 @@ def _migration_script():
 
 
 class HyperFluxWindow(QMainWindow):
-    def __init__(self):
+    service_error = Signal(str)
+
+    def __init__(self, runtime_config=None):
         super().__init__()
+        self.runtime_config = runtime_config
+        self._kobold_process = None
+        self._search_server = None
+        self._search_thread = None
         self.setWindowTitle("HyperFlux AI")
         self.resize(1360, 900)
         self.setMinimumSize(900, 620)
 
-        icon_path = Path(__file__).resolve().with_name("logo_hyperflux") / "dark5.4.png"
+        icon_path = desktop_logo_path()
         if icon_path.is_file():
             self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -190,6 +204,11 @@ class HyperFluxWindow(QMainWindow):
             )
             return
         self.view.load(QUrl.fromLocalFile(str(html_path)))
+        if runtime_config:
+            self.service_error.connect(
+                lambda message: QMessageBox.critical(self, "Local service failed", message)
+            )
+            self._start_local_services()
 
     def _open_external_link(self, request):
         QDesktopServices.openUrl(request.requestedUrl())
@@ -203,12 +222,104 @@ class HyperFluxWindow(QMainWindow):
                 "Check that the project files are present and try again.",
             )
 
+    def _start_local_services(self):
+        model_socket = QTcpSocket(self)
+        model_socket.connectToHost("127.0.0.1", 5001)
+        model_running = model_socket.waitForConnected(250)
+        model_socket.abort()
+        if not model_running:
+            executable = self.runtime_config["kobold_path"]
+            model = self.runtime_config["model_path"]
+            self._kobold_process = QProcess(self)
+            self._kobold_process.setWorkingDirectory(str(data_directory()))
+            self._kobold_process.errorOccurred.connect(
+                lambda error: self.service_error.emit(
+                    f"Could not start KoboldCpp ({error.name}). "
+                    "Reopen setup and check the selected executable."
+                )
+            )
+            self._kobold_process.finished.connect(
+                lambda exit_code, _status: self.service_error.emit(
+                    f"KoboldCpp stopped unexpectedly (exit code {exit_code})."
+                )
+                if exit_code != 0
+                else None
+            )
+            self._kobold_process.start(
+                executable,
+                ["--model", model, "--port", "5001", "--skiplaunch"],
+            )
+
+        self._search_thread = threading.Thread(
+            target=self._run_search_bridge,
+            name="HyperFluxSearchBridge",
+            daemon=True,
+        )
+        self._search_thread.start()
+
+    def _run_search_bridge(self):
+        try:
+            from hyperflux_interacter import Config, HyperFluxEngine
+            from hyperflux_server import create_search_bridge, search_bridge_is_running
+
+            if search_bridge_is_running(Config.SEARCH_BRIDGE_HOST, Config.SEARCH_BRIDGE_PORT):
+                return
+            engine = HyperFluxEngine()
+            server = create_search_bridge(
+                engine,
+                Config.SEARCH_BRIDGE_HOST,
+                Config.SEARCH_BRIDGE_PORT,
+                Config.SEARCH_RESULT_COUNT,
+            )
+            self._search_server = server
+            server.serve_forever()
+        except OSError as error:
+            self.service_error.emit(f"Could not start the local search bridge: {error}")
+
+    def closeEvent(self, event):
+        if self._search_server is not None:
+            self._search_server.shutdown()
+            self._search_server.server_close()
+        if self._kobold_process is not None:
+            self._kobold_process.terminate()
+            if not self._kobold_process.waitForFinished(3000):
+                self._kobold_process.kill()
+                self._kobold_process.waitForFinished(1000)
+        super().closeEvent(event)
+
 
 def main():
     application = QApplication(sys.argv)
     application.setApplicationName("HyperFlux AI")
+    if "--smoke-test" in sys.argv[1:]:
+        html_path = Path(__file__).resolve().with_name("HyperFlux Web.html")
+        logo_path = desktop_logo_path()
+        if not html_path.is_file() or not logo_path.is_file():
+            return 2
+        view = QWebEngineView()
+        loop = QEventLoop()
+        result = []
+        timeout = QTimer()
+        timeout.setSingleShot(True)
+        view.loadFinished.connect(lambda successful: (result.append(successful), loop.quit()))
+        timeout.timeout.connect(loop.quit)
+        view.setHtml("<html><body>HyperFlux packaged WebEngine smoke test</body></html>")
+        timeout.start(30000)
+        loop.exec()
+        return 0 if result == [True] else 3
+    runtime_config = None
+    if getattr(sys, "frozen", False):
+        from hyperflux_setup import ensure_runtime
+
+        try:
+            runtime_config = ensure_runtime()
+        except (OSError, RuntimeError) as error:
+            QMessageBox.critical(None, "HyperFlux setup failed", str(error))
+            return 1
+        if runtime_config is None:
+            return 0
     try:
-        window = HyperFluxWindow()
+        window = HyperFluxWindow(runtime_config)
     except OSError as error:
         QMessageBox.critical(
             None,

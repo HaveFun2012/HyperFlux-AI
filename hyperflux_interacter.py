@@ -55,7 +55,7 @@ console = Console(theme=custom_theme)
 class Config:
     ASSISTANT_NAME = "HyperFlux"
     VERSION = "HyperFlux Gen 5.4 Gemma3"
-    BRAIN_PATH = Path("hf_brain.json")
+    BRAIN_PATH = Path(__file__).resolve().with_name("hf_brain.json")
     MAX_MEMORY_EXCHANGES = 14
     MAX_CONTEXT_LENGTH = 2048
     ESTIMATED_CHARS_PER_TOKEN = 3
