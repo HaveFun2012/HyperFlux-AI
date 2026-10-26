@@ -4,10 +4,10 @@ HyperFlux AI is a local Windows assistant built around a GGUF model served by Ko
 
 ## Project components
 
-- `hyperflux_desktop.py` — PySide6 desktop interface.
+- `hyperflux_desktop.py` — desktop window embedding the shared `HyperFlux Web.html` interface.
 - `hyperflux_interacter.py` — preserved terminal interface and reusable chat/search logic.
-- `hyperflux_server.py` — local search bridge for the HTML reference.
-- `HyperFlux Web.html` — retained browser UI reference.
+- `hyperflux_server.py` — local search bridge used by both interfaces.
+- `HyperFlux Web.html` — shared web interface, embedded by the desktop app or opened directly in a browser.
 - `setup_assets.ps1` — downloads runtime assets and installs Python dependencies.
 - `Start_HyperFlux_Server.bat` — starts KoboldCpp and the search bridge separately from either UI.
 - `Run_HyperFlux.bat` — starts the PySide6 desktop UI.
@@ -51,17 +51,18 @@ The setup script downloads approximately 3 GB of model and server assets, in add
 
 - KoboldCpp model API: `http://localhost:5001`
 - Search bridge API: `http://127.0.0.1:5002`
-- Desktop chat history and settings are stored under `%LOCALAPPDATA%\HyperFlux`.
-- The HTML interface continues to keep its own separate browser `localStorage` history and settings.
+- Desktop chat history, settings, and embedded-browser data are stored under `%LOCALAPPDATA%\HyperFlux`.
+- The embedded desktop interface and the browser interface keep separate `localStorage` histories and settings.
 - The terminal and desktop app retain separate chat histories.
 
-The browser HTML file is a reference/client, not embedded in the PySide6 application. It communicates directly with KoboldCpp for generation and uses `hyperflux_server.py` for search. Start the local servers before using either client.
+The desktop app embeds the same HTML, styles, and JavaScript used by the browser interface through Qt WebEngine. The embedded interface stores its browser data in a desktop-specific profile and imports existing desktop chats and settings on first launch. Both interfaces communicate directly with KoboldCpp for generation and use `hyperflux_server.py` for search. Start the local servers before using either client.
 
 ## Python dependencies
 
 `requirements.txt` contains the external packages used by the desktop, terminal and bridge:
 
-- `PySide6-Essentials` — PySide6 Qt widgets used by the desktop app (the lightweight official Qt package).
+- `PySide6-Essentials` — PySide6 Qt widgets.
+- `PySide6-WebEngine` — embeds the shared web interface in the desktop app.
 - `requests` — local API and online search HTTP requests.
 - `rich` — terminal interface.
 - `ddgs` — preferred optional web-search provider, with HTTP fallbacks in the source.
