@@ -105,6 +105,15 @@ class HyperFluxCoreTests(unittest.TestCase):
         self.assertIn("Desktop-specific instructions.", prompt)
         self.assertNotIn("This terminal interface", prompt)
 
+    def test_default_prompt_guides_careful_reasoning_without_exposing_chain_of_thought(self):
+        with patch.object(HyperFluxEngine, "_load_model_name"):
+            engine = HyperFluxEngine()
+        with patch("hyperflux_interacter.requests.post", return_value=FakeStreamResponse()) as post:
+            engine.query_local_llm("Compare two approaches to this complex problem.", quiet=True)
+        prompt = post.call_args.kwargs["json"]["prompt"]
+        self.assertIn("reason carefully before answering", prompt)
+        self.assertIn("not private chain-of-thought", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
