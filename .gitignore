@@ -17,3 +17,6 @@ venv/
 # Local user data and temporary files
 /HyperFluxData/
 *.tmp
+
+# graphify knowledge-graph output
+/graphify-out/
