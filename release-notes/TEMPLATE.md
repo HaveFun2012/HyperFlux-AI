@@ -1,12 +1,12 @@
 # HyperFlux <version>
 
-HyperFlux includes the Gemma3 Flash 5 interface and the Gen5.4 Gemma3 terminal
+HyperFlux includes the Gemma3 Flash 1 interface and the Gen1 Gemma3 terminal
 interface. This release is a Windows desktop installer; model weights are not
 bundled.
 
 ## Highlights
 
-- Shared Gemma3 Flash 5 desktop interface and Gen5.4 Gemma3 terminal fallback.
+- Shared Gemma3 Flash 1 desktop interface and Gen1 Gemma3 terminal fallback.
 - First-run setup can reuse local GGUF/KoboldCpp assets or download selected official assets.
 - Desktop settings and chat history remain in the per-user local application data folder.
 

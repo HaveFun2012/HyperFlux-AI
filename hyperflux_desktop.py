@@ -26,10 +26,12 @@ def data_directory():
     return root / "HyperFlux"
 
 
+def resource_directory():
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
+
 def desktop_logo_path():
-    logo_directory = Path(__file__).resolve().with_name("logo_hyperflux")
-    desktop_logo = logo_directory / "hyperfluxdesktop.png"
-    return desktop_logo if desktop_logo.is_file() else logo_directory / "dark5.4.png"
+    return resource_directory() / "logo_hyperflux" / "hyperfluxdesktop.png"
 
 
 def _read_legacy_settings(path):
@@ -195,7 +197,7 @@ class HyperFluxWindow(QMainWindow):
         self.view.loadFinished.connect(self._page_loaded)
         self.setCentralWidget(self.view)
 
-        html_path = Path(__file__).resolve().with_name("HyperFlux Web.html")
+        html_path = resource_directory() / "HyperFlux Web.html"
         if not html_path.is_file():
             QMessageBox.critical(
                 self,
@@ -292,7 +294,7 @@ def main():
     application = QApplication(sys.argv)
     application.setApplicationName("HyperFlux AI")
     if "--smoke-test" in sys.argv[1:]:
-        html_path = Path(__file__).resolve().with_name("HyperFlux Web.html")
+        html_path = resource_directory() / "HyperFlux Web.html"
         logo_path = desktop_logo_path()
         if not html_path.is_file() or not logo_path.is_file():
             return 2
@@ -301,9 +303,25 @@ def main():
         result = []
         timeout = QTimer()
         timeout.setSingleShot(True)
-        view.loadFinished.connect(lambda successful: (result.append(successful), loop.quit()))
+        def verify_logo_load(successful):
+            if not successful:
+                result.append(False)
+                loop.quit()
+                return
+
+            view.page().runJavaScript(
+                "(() => {"
+                "const logos = [...document.querySelectorAll("
+                "'.hyperflux-logo-img, .flash-model-logo-img')];"
+                "return logos.length > 0 && logos.every("
+                "image => image.complete && image.naturalWidth > 0);"
+                "})()",
+                lambda loaded: (result.append(bool(loaded)), loop.quit()),
+            )
+
+        view.loadFinished.connect(verify_logo_load)
         timeout.timeout.connect(loop.quit)
-        view.setHtml("<html><body>HyperFlux packaged WebEngine smoke test</body></html>")
+        view.load(QUrl.fromLocalFile(str(html_path)))
         timeout.start(30000)
         loop.exec()
         return 0 if result == [True] else 3

@@ -1,6 +1,6 @@
 """
 ================================═══════════════════════════════════════════════
-                    HYPERFLUX GEN 5 - DATASET COMPILER & TRAINER
+                    HYPERFLUX GEN 1 - DATASET COMPILER & TRAINER
 ================================═══════════════════════════════════════════════
 """
 import json
@@ -23,7 +23,7 @@ def extract_keywords(text: str) -> set:
     return [w for w in words if w not in fillers and len(w) > 1]
 
 def build_and_train():
-    print("--- Training HyperFlux Gen 5 Brain Matrix ---")
+    print("--- Training HyperFlux Gen 1 Brain Matrix ---")
     
     # This is your training database! You can expand this list as much as you want.
     training_data = [
@@ -66,7 +66,7 @@ def build_and_train():
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(brain_matrix, f, indent=4, ensure_ascii=False)
         
-    print(f"[Success] HyperFlux Gen 5 training complete! Saved to '{output_path}'.")
+    print(f"[Success] HyperFlux Gen 1 training complete! Saved to '{output_path}'.")
 
 if __name__ == "__main__":
     build_and_train()
