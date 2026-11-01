@@ -1,28 +1,29 @@
 @echo off
 title HyperFlux AI Desktop
-cd /d "%~dp0"
+set "PROJECT_DIR=%~dp0src"
+cd /d "%PROJECT_DIR%"
 
-if exist "%~dp0HyperFlux.exe" (
-    start "HyperFlux AI" "%~dp0HyperFlux.exe"
+if exist "%PROJECT_DIR%\HyperFlux.exe" (
+    start "HyperFlux AI" "%PROJECT_DIR%\HyperFlux.exe"
     exit /b 0
 )
 
-if exist "%~dp0dist\HyperFlux\HyperFlux.exe" (
-    start "HyperFlux AI" "%~dp0dist\HyperFlux\HyperFlux.exe"
+if exist "%PROJECT_DIR%\dist\HyperFlux\HyperFlux.exe" (
+    start "HyperFlux AI" "%PROJECT_DIR%\dist\HyperFlux\HyperFlux.exe"
     exit /b 0
 )
 
-if not exist "python_embed\pythonw.exe" (
-    echo Python runtime is missing. Run setup_assets.ps1 first.
+if not exist "%PROJECT_DIR%\python_embed\pythonw.exe" (
+    echo Python runtime is missing. Run src\scripts\setup_assets.ps1 first.
     pause
     exit /b 1
 )
 
-python_embed\python.exe -c "from PySide6.QtWebEngineWidgets import QWebEngineView" >nul 2>&1
+"%PROJECT_DIR%\python_embed\python.exe" -c "from PySide6.QtWebEngineWidgets import QWebEngineView" >nul 2>&1
 if errorlevel 1 (
-    echo Qt WebEngine is missing. Run setup_assets.ps1 to install desktop dependencies.
+    echo Qt WebEngine is missing. Run src\scripts\setup_assets.ps1 to install desktop dependencies.
     pause
     exit /b 1
 )
 
-start "HyperFlux AI" python_embed\pythonw.exe hyperflux_desktop.py
+start "HyperFlux AI" "%PROJECT_DIR%\python_embed\pythonw.exe" -m hyperflux.desktop

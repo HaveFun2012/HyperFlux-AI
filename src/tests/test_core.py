@@ -4,8 +4,9 @@ from unittest.mock import patch
 
 import requests
 
-from hyperflux_interacter import HyperFluxEngine, SafeMathSolver
-from hyperflux_server import create_search_bridge
+from hyperflux.core.engine import HyperFluxEngine
+from hyperflux.core.math_solver import SafeMathSolver
+from hyperflux.search.bridge import create_search_bridge
 
 
 class FakeSearchEngine:
@@ -88,7 +89,7 @@ class HyperFluxCoreTests(unittest.TestCase):
         partial = []
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
-        with patch("hyperflux_interacter.requests.post", return_value=FakeStreamResponse()):
+        with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()):
             response = engine.query_local_llm("test prompt", token_callback=partial.append, quiet=True)
         self.assertEqual(response, "Hello")
         self.assertEqual(partial, ["Hello"])
@@ -99,7 +100,7 @@ class HyperFluxCoreTests(unittest.TestCase):
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
         engine.system_instruction = "Desktop-specific instructions."
-        with patch("hyperflux_interacter.requests.post", return_value=FakeStreamResponse()) as post:
+        with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()) as post:
             engine.query_local_llm("test prompt", quiet=True)
         prompt = post.call_args.kwargs["json"]["prompt"]
         self.assertIn("Desktop-specific instructions.", prompt)
@@ -108,7 +109,7 @@ class HyperFluxCoreTests(unittest.TestCase):
     def test_default_prompt_guides_careful_reasoning_without_exposing_chain_of_thought(self):
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
-        with patch("hyperflux_interacter.requests.post", return_value=FakeStreamResponse()) as post:
+        with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()) as post:
             engine.query_local_llm("Compare two approaches to this complex problem.", quiet=True)
         prompt = post.call_args.kwargs["json"]["prompt"]
         self.assertIn("reason carefully before answering", prompt)

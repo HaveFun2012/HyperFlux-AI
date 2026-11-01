@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]  # src/
 TEMPLATE = Path(__file__).with_name("TEMPLATE.md")
 INSTALLER = ROOT / "dist" / "HyperFlux-Setup.exe"
 

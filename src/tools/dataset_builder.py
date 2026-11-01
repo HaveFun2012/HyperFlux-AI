@@ -62,7 +62,7 @@ def build_and_train():
                 brain_matrix[word] = response_cleaned
 
     # Save the trained brain matrix file locally
-    output_path = Path("hf_brain.json")
+    output_path = Path(__file__).resolve().parents[1] / "data" / "hf_brain.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(brain_matrix, f, indent=4, ensure_ascii=False)
         

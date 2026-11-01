@@ -1,24 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
 from pathlib import Path
 
-root = Path(SPECPATH).resolve().parent
+from PyInstaller.utils.hooks import collect_submodules
+
+root = Path(SPECPATH).resolve().parent  # src/
+sys.path.insert(0, str(root))
 
 a = Analysis(
-    [str(root / "hyperflux_desktop.py")],
+    [str(root / "hyperflux" / "desktop" / "__main__.py")],
     pathex=[str(root)],
     binaries=[],
+    # Keep the same web/ and data/ layout as src/ so hyperflux.paths works in both.
     datas=[
-        (str(root / "HyperFlux Web.html"), "."),
-        (str(root / "logo_hyperflux"), "logo_hyperflux"),
-        (str(root / "hf_brain.json"), "."),
-        (str(root / "LICENSES.md"), "."),
+        (str(root / "web"), "web"),
+        (str(root / "data"), "data"),
+        (str(root.parent / "LICENSES.md"), "."),
     ],
-    hiddenimports=[
-        "hyperflux_setup",
-        "hyperflux_interacter",
-        "hyperflux_server",
-    ],
+    # Some modules are imported lazily inside functions.
+    hiddenimports=collect_submodules("hyperflux"),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -1,12 +1,12 @@
 # Downloaded runtime assets
-/python_embed/
-/koboldcpp*.exe
+/src/python_embed/
+/src/koboldcpp*.exe
 *.gguf
-/model.gguf.download
-/koboldcpp.exe.download
-/build/
-/dist/
-/packaging/hyperflux.ico
+/src/model.gguf.download
+/src/koboldcpp.exe.download
+/src/build/
+/src/dist/
+/src/packaging/hyperflux.ico
 
 # Python-generated files
 __pycache__/

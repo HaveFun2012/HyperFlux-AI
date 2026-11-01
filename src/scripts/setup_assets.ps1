@@ -8,7 +8,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Runtime assets live in src\, one level above this scripts\ folder.
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $PythonDirectory = Join-Path $ProjectRoot "python_embed"
 $RequirementsFile = Join-Path $ProjectRoot "requirements.txt"
 $ModelPath = Join-Path $ProjectRoot "model.gguf"
@@ -147,7 +148,7 @@ function Install-PythonRuntime {
 }
 
 if (-not (Test-Path -LiteralPath $RequirementsFile)) {
-    throw "requirements.txt is missing from the project root."
+    throw "requirements.txt is missing from '$ProjectRoot'."
 }
 
 if (-not (Test-Gguf $ModelPath)) {

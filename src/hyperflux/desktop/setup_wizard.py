@@ -1,11 +1,6 @@
-"""First-run model selection and verified KoboldCpp setup for Windows builds."""
+"""First-run setup dialog: pick a GGUF model and a (possibly downloaded) KoboldCpp."""
 
-import hashlib
-import json
-import os
-import shutil
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -28,193 +23,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-
-KOBOLD_RELEASE_API = "https://api.github.com/repos/LostRuins/koboldcpp/releases/latest"
-APP_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "HyperFlux"
-RUNTIME_CONFIG = APP_DATA / "runtime.json"
-
-
-def _is_gguf(path):
-    try:
-        with Path(path).open("rb") as source:
-            return source.read(4) == b"GGUF"
-    except OSError:
-        return False
-
-
-def _is_windows_executable(path):
-    try:
-        with Path(path).open("rb") as source:
-            dos_header = source.read(64)
-            if len(dos_header) < 64 or dos_header[:2] != b"MZ":
-                return False
-            pe_offset = int.from_bytes(dos_header[60:64], "little")
-            if not 64 <= pe_offset <= 16 * 1024 * 1024:
-                return False
-            source.seek(pe_offset)
-            pe_header = source.read(6)
-            return (
-                pe_header[:4] == b"PE\0\0"
-                and int.from_bytes(pe_header[4:6], "little") in {0x014C, 0x8664}
-            )
-    except OSError:
-        return False
-
-
-def _candidate_files(filename, extra_paths=()):
-    program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-    program_files_x86 = Path(
-        os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
-    )
-    local_programs = Path(os.environ.get("LOCALAPPDATA", APP_DATA.parent)) / "Programs"
-    candidates = [
-        Path(sys.executable).resolve().parent / filename,
-        APP_DATA / filename,
-        Path.home() / "Downloads" / filename,
-        Path.home() / "Documents" / filename,
-        Path.home() / "Desktop" / filename,
-        local_programs / "KoboldCpp" / filename,
-        program_files / "KoboldCpp" / filename,
-        program_files_x86 / "KoboldCpp" / filename,
-        Path.cwd() / filename,
-        *map(Path, extra_paths),
-    ]
-    return next((path for path in candidates if path.is_file()), None)
-
-
-def _candidate_gguf_files():
-    directories = [
-        APP_DATA / "models",
-        Path.home() / "Downloads",
-        Path.home() / "Documents",
-        Path.home() / "Desktop",
-        Path(sys.executable).resolve().parent,
-        Path.cwd(),
-    ]
-    candidates = {}
-    for directory in directories:
-        if not directory.is_dir():
-            continue
-        for path in directory.glob("*.gguf"):
-            if path.is_file() and _is_gguf(path):
-                candidates[str(path.resolve()).casefold()] = path.resolve()
-    preferred_names = {"model.gguf": 0}
-    return sorted(
-        candidates.values(),
-        key=lambda path: (
-            preferred_names.get(path.name.casefold(), 2),
-            str(path).casefold(),
-        ),
-    )
-
-
-def _load_config():
-    try:
-        config = json.loads(RUNTIME_CONFIG.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"Could not read saved runtime settings: {error}") from error
-    if not isinstance(config, dict):
-        raise RuntimeError("Saved runtime settings are not a JSON object.")
-    model_value = config.get("model_path")
-    kobold_value = config.get("kobold_path")
-    if not isinstance(model_value, str) or not isinstance(kobold_value, str):
-        raise RuntimeError("Saved runtime settings contain invalid asset paths.")
-    model_path = Path(model_value)
-    kobold_path = Path(kobold_value)
-    if not _is_gguf(model_path):
-        return None
-    if not _is_windows_executable(kobold_path):
-        return None
-    return {"model_path": str(model_path), "kobold_path": str(kobold_path)}
-
-
-def _save_config(model_path, kobold_path):
-    APP_DATA.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(
-        {"model_path": str(model_path.resolve()), "kobold_path": str(kobold_path.resolve())},
-        indent=2,
-    )
-    handle, temporary_path = tempfile.mkstemp(
-        prefix="runtime-", suffix=".tmp", dir=APP_DATA
-    )
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as destination:
-            destination.write(payload)
-            destination.flush()
-            os.fsync(destination.fileno())
-        os.replace(temporary_path, RUNTIME_CONFIG)
-    finally:
-        if os.path.exists(temporary_path):
-            os.unlink(temporary_path)
-
-
-def _download(
-    url, destination, expected_size, expected_hash, progress, log, is_cancelled,
-    request_headers=None,
-):
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    free_bytes = shutil.disk_usage(destination.parent).free
-    if free_bytes < expected_size + 64 * 1024 * 1024:
-        raise OSError(
-            f"Not enough free disk space for {destination.name}; "
-            f"at least {expected_size + 64 * 1024 * 1024:,} bytes are required."
-        )
-
-    partial = destination.with_suffix(destination.suffix + ".part")
-    if destination.exists():
-        raise FileExistsError(
-            f"Refusing to overwrite existing asset {destination}; choose or remove it explicitly."
-        )
-    offset = partial.stat().st_size if partial.exists() else 0
-    if offset > expected_size:
-        partial.unlink()
-        offset = 0
-    headers = {"Range": f"bytes={offset}-"} if offset else {}
-    headers.update(request_headers or {})
-    response = requests.get(url, headers=headers, stream=True, timeout=(20, 90))
-    try:
-        response.raise_for_status()
-        resume = offset > 0 and response.status_code == 206
-        if resume and not response.headers.get("Content-Range", "").startswith(
-            f"bytes {offset}-"
-        ):
-            response.close()
-            partial.unlink(missing_ok=True)
-            raise OSError("Download server returned an invalid range for resume.")
-        if offset and not resume:
-            offset = 0
-            log("Server does not support resuming; restarting this asset download.")
-        total = expected_size
-        received = offset
-        digest = hashlib.sha256()
-        if resume:
-            with partial.open("rb") as existing:
-                for chunk in iter(lambda: existing.read(1024 * 1024), b""):
-                    digest.update(chunk)
-        mode = "ab" if resume else "wb"
-        with partial.open(mode) as output:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
-                if is_cancelled():
-                    raise InterruptedError("Setup cancelled; the partial download is available for retry.")
-                if not chunk:
-                    continue
-                output.write(chunk)
-                digest.update(chunk)
-                received += len(chunk)
-                progress(min(100, received * 100 // total))
-        if received != expected_size:
-            raise OSError(
-                f"Downloaded size mismatch for {destination.name}: "
-                f"expected {expected_size:,} bytes, received {received:,}."
-            )
-        if expected_hash and digest.hexdigest().lower() != expected_hash.lower():
-            partial.unlink(missing_ok=True)
-            raise OSError(f"SHA-256 verification failed for {destination.name}.")
-        os.replace(partial, destination)
-    finally:
-        response.close()
+from hyperflux.desktop import runtime_assets as assets
 
 
 class _SetupWorker(QThread):
@@ -239,7 +48,7 @@ class _SetupWorker(QThread):
                 self.progress.emit(0)
                 self.log.emit("Checking the official KoboldCpp release metadata.")
                 metadata = requests.get(
-                    KOBOLD_RELEASE_API,
+                    assets.KOBOLD_RELEASE_API,
                     headers={
                         "Accept": "application/vnd.github+json",
                         "User-Agent": "HyperFlux-Setup",
@@ -271,13 +80,13 @@ class _SetupWorker(QThread):
                     and len(digest.split(":", 1)[1]) == 64
                     else ""
                 )
-                kobold_path = str(APP_DATA / "KoboldCpp" / "koboldcpp.exe")
+                kobold_path = str(assets.APP_DATA / "KoboldCpp" / "koboldcpp.exe")
                 existing_kobold = Path(kobold_path)
-                if existing_kobold.exists() and _is_windows_executable(existing_kobold):
+                if existing_kobold.exists() and assets.is_windows_executable(existing_kobold):
                     self.log.emit("Reusing the existing KoboldCpp executable.")
                 else:
                     self.log.emit(f"Downloading official KoboldCpp {release.get('tag_name', '')}.")
-                    _download(
+                    assets.download(
                         url,
                         existing_kobold,
                         size,
@@ -286,25 +95,28 @@ class _SetupWorker(QThread):
                         self.log.emit,
                         self.isInterruptionRequested,
                     )
-                if not _is_windows_executable(kobold_path):
+                if not assets.is_windows_executable(kobold_path):
                     raise OSError("Downloaded KoboldCpp file is not a Windows executable.")
                 if not expected_hash:
                     self.log.emit(
                         "GitHub supplied no SHA-256 digest; verified TLS source, "
                         "release asset size, and the Windows MZ executable header."
                     )
-            if not _is_gguf(model_path):
+            if not assets.is_gguf(model_path):
                 raise OSError("Selected model is not a readable GGUF file.")
-            if not _is_windows_executable(kobold_path):
+            if not assets.is_windows_executable(kobold_path):
                 raise OSError("Selected KoboldCpp path is not a Windows executable.")
             if self.isInterruptionRequested():
                 raise InterruptedError
-            _save_config(model_path, kobold_path)
+            assets.save_config(model_path, kobold_path)
             self.completed.emit(model_path, kobold_path)
         except InterruptedError:
             self.cancelled.emit()
         except (OSError, requests.RequestException, ValueError, TypeError) as error:
             self.failed.emit(str(error))
+        except Exception as error:
+            # Never let the thread die silently: the dialog would wait forever.
+            self.failed.emit(f"Unexpected setup error: {error!r}")
 
 
 class SetupWizard(QDialog):
@@ -376,9 +188,9 @@ class SetupWizard(QDialog):
         button_row.addWidget(self.continue_button)
         layout.addLayout(button_row)
 
-        models = _candidate_gguf_files()
-        kobold = _candidate_files(
-            "koboldcpp.exe", [APP_DATA / "KoboldCpp" / "koboldcpp.exe"]
+        models = assets.find_gguf_models()
+        kobold = assets.find_file(
+            "koboldcpp.exe", [assets.APP_DATA / "KoboldCpp" / "koboldcpp.exe"]
         )
         for model in models:
             self.detected_models.addItem(str(model), str(model))
@@ -386,7 +198,7 @@ class SetupWizard(QDialog):
         self.detected_models.setVisible(len(models) > 1)
         if models:
             self.model_path.setText(str(models[0]))
-        if kobold and _is_windows_executable(kobold):
+        if kobold and assets.is_windows_executable(kobold):
             self.kobold_path.setText(str(kobold))
             self.download_kobold.setChecked(False)
         self._toggle_kobold_path(self.download_kobold.isChecked())
@@ -418,14 +230,14 @@ class SetupWizard(QDialog):
     def _start(self):
         model_path = self.model_path.text().strip()
         kobold_path = "download" if self.download_kobold.isChecked() else self.kobold_path.text().strip()
-        if not _is_gguf(model_path):
+        if not assets.is_gguf(model_path):
             QMessageBox.warning(
                 self,
                 "Choose a model",
                 "Select a readable GGUF model. Model downloads are not configured.",
             )
             return
-        if kobold_path != "download" and not _is_windows_executable(kobold_path):
+        if kobold_path != "download" and not assets.is_windows_executable(kobold_path):
             QMessageBox.warning(self, "Choose KoboldCpp", "Select a valid KoboldCpp Windows executable or choose the official download.")
             return
 
@@ -474,7 +286,7 @@ class SetupWizard(QDialog):
         line = f"{datetime.now(timezone.utc).astimezone().isoformat(timespec='seconds')} {message}"
         self.log_output.appendPlainText(line)
         try:
-            log_dir = APP_DATA / "logs"
+            log_dir = assets.APP_DATA / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
             with (log_dir / "setup.log").open("a", encoding="utf-8") as destination:
                 destination.write(line + "\n")
@@ -487,7 +299,7 @@ class SetupWizard(QDialog):
 def ensure_runtime(parent=None):
     config_error = None
     try:
-        config = _load_config()
+        config = assets.load_config()
     except RuntimeError as error:
         config = None
         config_error = str(error)
@@ -496,7 +308,7 @@ def ensure_runtime(parent=None):
     wizard = SetupWizard(parent)
     if config_error:
         wizard._append_log(f"Saved setup settings need repair: {config_error}")
-    elif RUNTIME_CONFIG.exists():
+    elif assets.RUNTIME_CONFIG.exists():
         wizard._append_log(
             "Saved asset paths are no longer valid. Select current assets to continue."
         )

@@ -4,11 +4,11 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DESKTOP_LOGO = ROOT / "logo_hyperflux" / "hyperfluxdesktop.png"
+DESKTOP_LOGO = ROOT / "web" / "logo_hyperflux" / "hyperfluxdesktop.png"
 SOURCE = (
     DESKTOP_LOGO
     if DESKTOP_LOGO.is_file()
-    else ROOT / "logo_hyperflux" / "dark5.4.png"
+    else ROOT / "web" / "logo_hyperflux" / "dark5.4.png"
 )
 DESTINATION = ROOT / "packaging" / "hyperflux.ico"
 

@@ -28,13 +28,13 @@ jobs:
           winget install --id JRSoftware.InnoSetup --exact --version 6.7.3 --silent --accept-package-agreements --accept-source-agreements
 
       - name: Install pinned build dependencies
-        run: python -m pip install --disable-pip-version-check -r requirements-release.txt
+        run: python -m pip install --disable-pip-version-check -r src\requirements-release.txt
 
       - name: Build application bundle
         shell: pwsh
         run: |
-          python packaging/build_icon.py
-          python -m PyInstaller --noconfirm --clean packaging/hyperflux.spec
+          python src\packaging\build_icon.py
+          python -m PyInstaller --noconfirm --clean --distpath src\dist --workpath src\build src\packaging\hyperflux.spec
 
       - name: Build installer
         shell: pwsh
@@ -49,29 +49,29 @@ jobs:
           if (-not $iscc) {
             throw "Inno Setup compiler was not found in the expected installation paths."
           }
-          & $iscc /Qp packaging\installer\HyperFlux.iss
+          & $iscc /Qp src\packaging\installer\HyperFlux.iss
           if ($LASTEXITCODE -ne 0) {
             throw "Inno Setup failed with exit code $LASTEXITCODE."
           }
-          if (-not (Test-Path dist\HyperFlux-Setup.exe)) {
+          if (-not (Test-Path src\dist\HyperFlux-Setup.exe)) {
             throw "The installer output was not created."
           }
 
       - name: Generate release notes and installer checksum
         env:
           HYPERFLUX_VERSION: ${{ github.ref_name }}
-        run: python release-notes\generate.py --version "$env:HYPERFLUX_VERSION"
+        run: python src\packaging\release-notes\generate.py --version "$env:HYPERFLUX_VERSION"
 
       - name: Run packaged smoke checks
         shell: pwsh
         run: |
           $env:QTWEBENGINE_DISABLE_SANDBOX = "1"
           $env:QTWEBENGINE_CHROMIUM_FLAGS = "--disable-gpu --no-sandbox"
-          python -m unittest discover -s tests -v
-          if (-not (Test-Path dist\HyperFlux\HyperFlux.exe)) {
+          python -m unittest discover -s src\tests -t src -v
+          if (-not (Test-Path src\dist\HyperFlux\HyperFlux.exe)) {
             throw "Packaged application executable is missing."
           }
-          & dist\HyperFlux\HyperFlux.exe --smoke-test
+          & src\dist\HyperFlux\HyperFlux.exe --smoke-test
           if ($LASTEXITCODE -ne 0) {
             throw "Packaged application smoke test failed with exit code $LASTEXITCODE."
           }
@@ -87,7 +87,7 @@ jobs:
               "/SP-",
               "/TASKS=!desktopicon"
             )
-            $installer = Start-Process -FilePath (Resolve-Path dist\HyperFlux-Setup.exe).Path -ArgumentList $arguments -Wait -PassThru
+            $installer = Start-Process -FilePath (Resolve-Path src\dist\HyperFlux-Setup.exe).Path -ArgumentList $arguments -Wait -PassThru
             if ($installer.ExitCode -ne 0) {
               throw "Installer returned exit code $($installer.ExitCode)."
             }
@@ -111,8 +111,8 @@ jobs:
         with:
           name: HyperFlux-Setup-${{ github.ref_name }}
           path: |
-            dist/HyperFlux-Setup.exe
-            dist/HyperFlux-Setup.exe.sha256
-            dist/RELEASE-NOTES.md
+            src/dist/HyperFlux-Setup.exe
+            src/dist/HyperFlux-Setup.exe.sha256
+            src/dist/RELEASE-NOTES.md
           if-no-files-found: error
           retention-days: 30

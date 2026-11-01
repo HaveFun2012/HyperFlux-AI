@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import hyperflux_setup
+from hyperflux.desktop import runtime_assets
 
 
 class _FakeResponse:
@@ -38,12 +38,12 @@ class HyperFluxSetupTests(unittest.TestCase):
             executable = Path(directory) / "koboldcpp.exe"
             model.write_bytes(b"GGUFtest")
             _write_fake_executable(executable)
-            self.assertTrue(hyperflux_setup._is_gguf(model))
-            self.assertTrue(hyperflux_setup._is_windows_executable(executable))
+            self.assertTrue(runtime_assets.is_gguf(model))
+            self.assertTrue(runtime_assets.is_windows_executable(executable))
             model.write_bytes(b"nope")
             executable.write_bytes(b"nope")
-            self.assertFalse(hyperflux_setup._is_gguf(model))
-            self.assertFalse(hyperflux_setup._is_windows_executable(executable))
+            self.assertFalse(runtime_assets.is_gguf(model))
+            self.assertFalse(runtime_assets.is_windows_executable(executable))
 
     def test_local_gguf_discovery_lists_available_models(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -56,11 +56,11 @@ class HyperFluxSetupTests(unittest.TestCase):
             first_model.write_bytes(b"GGUF-one")
             second_model.write_bytes(b"GGUF-two")
             with (
-                patch.object(hyperflux_setup.Path, "home", return_value=home),
-                patch.object(hyperflux_setup.Path, "cwd", return_value=root),
-                patch.object(hyperflux_setup, "APP_DATA", root / "data"),
+                patch.object(runtime_assets.Path, "home", return_value=home),
+                patch.object(runtime_assets.Path, "cwd", return_value=root),
+                patch.object(runtime_assets, "APP_DATA", root / "data"),
             ):
-                found = hyperflux_setup._candidate_gguf_files()
+                found = runtime_assets.find_gguf_models()
             self.assertEqual(set(found), {first_model, second_model})
 
     def test_download_verifies_hash_and_size(self):
@@ -68,8 +68,8 @@ class HyperFluxSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "asset.gguf"
             response = _FakeResponse([content[:5], content[5:]])
-            with patch("hyperflux_setup.requests.get", return_value=response):
-                hyperflux_setup._download(
+            with patch("hyperflux.desktop.runtime_assets.requests.get", return_value=response):
+                runtime_assets.download(
                     "https://example.invalid/asset",
                     destination,
                     len(content),
@@ -87,7 +87,7 @@ class HyperFluxSetupTests(unittest.TestCase):
             destination = Path(directory) / "asset.gguf"
             destination.write_bytes(b"user data")
             with self.assertRaises(FileExistsError):
-                hyperflux_setup._download(
+                runtime_assets.download(
                     "https://example.invalid/asset",
                     destination,
                     9,
@@ -104,11 +104,11 @@ class HyperFluxSetupTests(unittest.TestCase):
             destination = Path(directory) / "asset.gguf"
             partial = destination.with_suffix(".gguf.part")
             with patch(
-                "hyperflux_setup.requests.get",
+                "hyperflux.desktop.runtime_assets.requests.get",
                 return_value=_FakeResponse([content]),
             ):
                 with self.assertRaisesRegex(OSError, "SHA-256"):
-                    hyperflux_setup._download(
+                    runtime_assets.download(
                         "https://example.invalid/asset",
                         destination,
                         len(content),
@@ -128,11 +128,11 @@ class HyperFluxSetupTests(unittest.TestCase):
             first_response = _FakeResponse([content[:8], content[8:12]])
             cancellation_checks = iter([False, True])
             with patch(
-                "hyperflux_setup.requests.get",
+                "hyperflux.desktop.runtime_assets.requests.get",
                 return_value=first_response,
             ):
                 with self.assertRaises(InterruptedError):
-                    hyperflux_setup._download(
+                    runtime_assets.download(
                         "https://example.invalid/asset",
                         destination,
                         len(content),
@@ -149,10 +149,10 @@ class HyperFluxSetupTests(unittest.TestCase):
                 headers={"Content-Range": f"bytes 8-{len(content) - 1}/{len(content)}"},
             )
             with patch(
-                "hyperflux_setup.requests.get",
+                "hyperflux.desktop.runtime_assets.requests.get",
                 return_value=resume_response,
             ) as get:
-                hyperflux_setup._download(
+                runtime_assets.download(
                     "https://example.invalid/asset",
                     destination,
                     len(content),
@@ -173,13 +173,29 @@ class HyperFluxSetupTests(unittest.TestCase):
             model.write_bytes(b"GGUFmodel")
             _write_fake_executable(executable)
             with (
-                patch.object(hyperflux_setup, "APP_DATA", root / "data"),
-                patch.object(hyperflux_setup, "RUNTIME_CONFIG", root / "data" / "runtime.json"),
+                patch.object(runtime_assets, "APP_DATA", root / "data"),
+                patch.object(runtime_assets, "RUNTIME_CONFIG", root / "data" / "runtime.json"),
             ):
-                hyperflux_setup._save_config(model, executable)
-                loaded = hyperflux_setup._load_config()
+                runtime_assets.save_config(model, executable)
+                loaded = runtime_assets.load_config()
             self.assertEqual(Path(loaded["model_path"]), model.resolve())
             self.assertEqual(Path(loaded["kobold_path"]), executable.resolve())
+
+    def test_runtime_config_accepts_string_paths(self):
+        # The setup wizard passes plain strings; this used to crash and freeze setup.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            executable = root / "koboldcpp.exe"
+            model.write_bytes(b"GGUFmodel")
+            _write_fake_executable(executable)
+            with (
+                patch.object(runtime_assets, "APP_DATA", root / "data"),
+                patch.object(runtime_assets, "RUNTIME_CONFIG", root / "data" / "runtime.json"),
+            ):
+                runtime_assets.save_config(str(model), str(executable))
+                loaded = runtime_assets.load_config()
+            self.assertEqual(Path(loaded["model_path"]), model.resolve())
 
 
 if __name__ == "__main__":

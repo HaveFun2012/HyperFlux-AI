@@ -1,4 +1,7 @@
-"""Local search bridge service used by the browser interface."""
+"""Local HTTP search bridge (port 5002) used by the web and desktop interfaces.
+
+Run on its own with:  python -m hyperflux.search.bridge
+"""
 
 import json
 import re
@@ -123,7 +126,8 @@ def search_bridge_is_running(host="127.0.0.1", port=5002):
 
 
 def run_search_bridge_service():
-    from hyperflux_interacter import Config, HyperFluxEngine
+    from hyperflux.config import Config
+    from hyperflux.core.engine import HyperFluxEngine
 
     server = create_search_bridge(
         HyperFluxEngine(),

@@ -33,7 +33,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "..\..\dist\HyperFlux\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\..\LICENSES.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\LICENSES.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\HyperFlux"; Filename: "{app}\HyperFlux.exe"
