@@ -1,4 +1,4 @@
-"""First-run asset selection and verified download wizard for packaged Windows builds."""
+"""First-run model selection and verified KoboldCpp setup for Windows builds."""
 
 import hashlib
 import json
@@ -29,13 +29,6 @@ from PySide6.QtWidgets import (
 )
 
 
-MODEL_URL = (
-    "https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF/resolve/"
-    "d0976223747697cb51e056d85c532013931fe52e/"
-    "gemma-3-4b-it-Q4_K_M.gguf?download=true"
-)
-MODEL_SHA256 = "4996030242583a40aa151ff93f49ed787ac8c25e4120c3ae4588b2e2a7d1ae94"
-MODEL_SIZE = 2489758112
 KOBOLD_RELEASE_API = "https://api.github.com/repos/LostRuins/koboldcpp/releases/latest"
 APP_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "HyperFlux"
 RUNTIME_CONFIG = APP_DATA / "runtime.json"
@@ -105,7 +98,7 @@ def _candidate_gguf_files():
         for path in directory.glob("*.gguf"):
             if path.is_file() and _is_gguf(path):
                 candidates[str(path.resolve()).casefold()] = path.resolve()
-    preferred_names = {"model.gguf": 0, "gemma-3-4b-it-q4_k_m.gguf": 1}
+    preferred_names = {"model.gguf": 0}
     return sorted(
         candidates.values(),
         key=lambda path: (
@@ -113,14 +106,6 @@ def _candidate_gguf_files():
             str(path).casefold(),
         ),
     )
-
-
-def _sha256(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _load_config():
@@ -239,12 +224,10 @@ class _SetupWorker(QThread):
     cancelled = Signal()
     completed = Signal(str, str)
 
-    def __init__(self, model_choice, kobold_choice, download_model, hugging_face_token):
+    def __init__(self, model_choice, kobold_choice):
         super().__init__()
         self.model_choice = model_choice
         self.kobold_choice = kobold_choice
-        self.download_model = download_model
-        self.hugging_face_token = hugging_face_token
 
     def run(self):
         try:
@@ -252,35 +235,6 @@ class _SetupWorker(QThread):
                 raise InterruptedError
             model_path = self.model_choice
             kobold_path = self.kobold_choice
-            if self.download_model:
-                model_path = str(APP_DATA / "models" / "gemma-3-4b-it-Q4_K_M.gguf")
-                existing_model = Path(model_path)
-                if existing_model.exists():
-                    if (
-                        existing_model.stat().st_size != MODEL_SIZE
-                        or _sha256(existing_model).lower() != MODEL_SHA256
-                    ):
-                        raise FileExistsError(
-                            "A different file already exists at the Gemma download path. "
-                            "It was preserved; move it or select another model before retrying."
-                        )
-                    self.log.emit("Reusing the existing verified Gemma model.")
-                else:
-                    self.log.emit("Downloading the explicitly selected Gemma 3 model.")
-                    _download(
-                        MODEL_URL,
-                        existing_model,
-                        MODEL_SIZE,
-                        MODEL_SHA256,
-                        self.progress.emit,
-                        self.log.emit,
-                        self.isInterruptionRequested,
-                        (
-                            {"Authorization": f"Bearer {self.hugging_face_token}"}
-                            if self.hugging_face_token
-                            else None
-                        ),
-                    )
             if kobold_path == "download":
                 self.progress.emit(0)
                 self.log.emit("Checking the official KoboldCpp release metadata.")
@@ -365,8 +319,8 @@ class SetupWizard(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(
             "<h2>Set up HyperFlux</h2>"
-            "<p>Choose an existing GGUF model or explicitly download the listed "
-            "Gemma model. HyperFlux will never substitute a different model.</p>"
+            "<p>Select an existing GGUF model. HyperFlux will not download, "
+            "replace, or silently substitute model files.</p>"
         ))
 
         model_row = QHBoxLayout()
@@ -383,22 +337,6 @@ class SetupWizard(QDialog):
         self.detected_models.currentIndexChanged.connect(self._select_detected_model)
         layout.addWidget(self.detected_models_label)
         layout.addWidget(self.detected_models)
-
-        self.download_model = QCheckBox(
-            "Download Gemma 3 4B IT Q4_K_M from Hugging Face (2.49 GB)"
-        )
-        self.download_model.toggled.connect(self._toggle_model_path)
-        layout.addWidget(self.download_model)
-        self.model_terms = QCheckBox(
-            "I have reviewed and accept the applicable Gemma terms for this model."
-        )
-        layout.addWidget(self.model_terms)
-        self.hugging_face_token = QLineEdit()
-        self.hugging_face_token.setEchoMode(QLineEdit.EchoMode.Password)
-        self.hugging_face_token.setPlaceholderText(
-            "Optional Hugging Face token; used for this download only, not saved"
-        )
-        layout.addWidget(self.hugging_face_token)
 
         layout.addWidget(QLabel("KoboldCpp Windows executable"))
         kobold_row = QHBoxLayout()
@@ -423,7 +361,9 @@ class SetupWizard(QDialog):
         self.log_output.setMaximumBlockCount(500)
         layout.addWidget(self.progress)
         layout.addWidget(self.log_output)
-        self.status = QLabel("Select assets to continue. Downloads run in the background.")
+        self.status = QLabel(
+            "Select a GGUF model and KoboldCpp executable. KoboldCpp downloads run in the background."
+        )
         layout.addWidget(self.status)
 
         button_row = QHBoxLayout()
@@ -446,11 +386,9 @@ class SetupWizard(QDialog):
         self.detected_models.setVisible(len(models) > 1)
         if models:
             self.model_path.setText(str(models[0]))
-            self.download_model.setChecked(False)
         if kobold and _is_windows_executable(kobold):
             self.kobold_path.setText(str(kobold))
             self.download_kobold.setChecked(False)
-        self._toggle_model_path(self.download_model.isChecked())
         self._toggle_kobold_path(self.download_kobold.isChecked())
 
     def _choose_model(self):
@@ -460,7 +398,6 @@ class SetupWizard(QDialog):
         if path:
             self.detected_models.setCurrentIndex(-1)
             self.model_path.setText(path)
-            self.download_model.setChecked(False)
 
     def _select_detected_model(self, index):
         if index >= 0:
@@ -474,26 +411,19 @@ class SetupWizard(QDialog):
             self.kobold_path.setText(path)
             self.download_kobold.setChecked(False)
 
-    def _toggle_model_path(self, downloading):
-        self.model_path.setEnabled(not downloading)
-        self.model_browse.setEnabled(not downloading)
-        self.detected_models.setEnabled(not downloading)
-        self.model_terms.setEnabled(downloading)
-        self.hugging_face_token.setEnabled(downloading)
-
     def _toggle_kobold_path(self, downloading):
         self.kobold_path.setEnabled(not downloading)
         self.kobold_browse.setEnabled(not downloading)
 
     def _start(self):
-        download_model = self.download_model.isChecked()
         model_path = self.model_path.text().strip()
         kobold_path = "download" if self.download_kobold.isChecked() else self.kobold_path.text().strip()
-        if not download_model and not _is_gguf(model_path):
-            QMessageBox.warning(self, "Choose a model", "Select a readable GGUF model or choose the explicit Gemma download.")
-            return
-        if download_model and not self.model_terms.isChecked():
-            QMessageBox.warning(self, "Model terms required", "Review and accept the applicable Gemma terms before downloading this model.")
+        if not _is_gguf(model_path):
+            QMessageBox.warning(
+                self,
+                "Choose a model",
+                "Select a readable GGUF model. Model downloads are not configured.",
+            )
             return
         if kobold_path != "download" and not _is_windows_executable(kobold_path):
             QMessageBox.warning(self, "Choose KoboldCpp", "Select a valid KoboldCpp Windows executable or choose the official download.")
@@ -501,12 +431,7 @@ class SetupWizard(QDialog):
 
         self.continue_button.setEnabled(False)
         self.status.setText("Validating and preparing selected assets...")
-        self.worker = _SetupWorker(
-            model_path,
-            kobold_path,
-            download_model,
-            self.hugging_face_token.text().strip(),
-        )
+        self.worker = _SetupWorker(model_path, kobold_path)
         self.worker.progress.connect(self.progress.setValue)
         self.worker.log.connect(self._append_log)
         self.worker.failed.connect(self._failed)

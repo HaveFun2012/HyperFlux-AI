@@ -349,10 +349,9 @@ class HyperFluxEngine:
                 "Depend on the exact loaded model and KoboldCPP configuration. "
                 "A model filename alone does not verify its architecture or features."
             ),
-            "gemma_3_4b_notes": (
-                "Gemma 3 4B model variants can support image understanding, but "
+            "image_input_notes": (
                 "HyperFlux currently sends text-only prompts and has no image-input "
-                "path. Image pan-and-scan is therefore not available in this app."
+                "path, regardless of the selected model's capabilities."
             ),
             "image_processing": False,
             "voice_processing": False,

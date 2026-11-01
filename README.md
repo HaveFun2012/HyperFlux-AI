@@ -18,35 +18,26 @@ Downloaded assets are intentionally ignored by Git:
 
 - `python_embed\` — official Python embeddable runtime.
 - `koboldcpp.exe` — official [KoboldCpp GitHub release](https://github.com/LostRuins/koboldcpp/releases).
-- `model.gguf` — Gemma 3 4B IT Q4_K_M GGUF from [`ggml-org/gemma-3-4b-it-GGUF`](https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF) on Hugging Face.
+- `model.gguf` — the locally selected Gemma 4 E2B Q4_K_M GGUF. Model weights are not tracked or bundled.
 
-The GGUF is a third-party conversion of Google's Gemma model, not a Google-published GGUF. Gemma terms apply; review and accept the applicable model terms before using or redistributing model weights. The setup script verifies the selected GGUF's pinned size and SHA-256.
+The GGUF is a local model file, not tracked or included in releases. Setup checks its GGUF signature and preserves it; it does not fetch or replace model weights. Review the model provider's terms and the GGUF source's terms before use or redistribution.
 
 ## Setup
 
 On Windows 10 or 11, with PowerShell and internet access:
 
 1. Clone or download this repository.
-2. In the project folder, run:
+2. Place your chosen model at `model.gguf` in the project folder, then run:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\setup_assets.ps1
    ```
 
-   The script downloads Python 3.14.8 from python.org, the latest official KoboldCpp Windows release from GitHub, and the pinned Gemma GGUF from Hugging Face. It then enables `pip` for the embedded runtime and installs packages listed in `requirements.txt`.
+   The script downloads Python 3.14.8 from python.org and the latest official KoboldCpp Windows release from GitHub. It validates and preserves your existing `model.gguf`, then installs packages listed in `requirements.txt`.
 
-3. If Hugging Face requires authentication for the model, set `HF_TOKEN` in the current PowerShell session and rerun the script:
+3. For a release install, launch HyperFlux from its Start Menu or desktop shortcut. The packaged `.exe` hosts the same `HyperFlux Web.html` interface and starts the selected local services. For a source checkout, `Run_HyperFlux.bat` prefers a built executable when available and otherwise falls back to Python; `Run_HyperFlux_Terminal.bat` retains the terminal interface. `Start_HyperFlux_Server.bat` remains available for manual development runs.
 
-   ```powershell
-   $env:HF_TOKEN = "your Hugging Face access token"
-   powershell -ExecutionPolicy Bypass -File .\setup_assets.ps1
-   ```
-
-   Do not store a token in the repository or commit it.
-
-4. For a release install, launch HyperFlux from its Start Menu or desktop shortcut. The packaged `.exe` hosts the same `HyperFlux Web.html` interface and starts the selected local services. For a source checkout, `Run_HyperFlux.bat` prefers a built executable when available and otherwise falls back to Python; `Run_HyperFlux_Terminal.bat` retains the terminal interface. `Start_HyperFlux_Server.bat` remains available for manual development runs.
-
-The setup script downloads approximately 3 GB of model and server assets, in addition to the runtime and dependencies. Ensure adequate disk space and bandwidth. It keeps existing `koboldcpp.exe` and `model.gguf` files by default. Use `-Force` to replace them with the script's official-release KoboldCpp binary and pinned Gemma file. `-KoboldVariant` accepts `standard`, `nocuda`, or `oldpc`.
+The setup script downloads the runtime and KoboldCpp, but not model weights. Ensure adequate disk space and bandwidth. It keeps existing `koboldcpp.exe` by default and always preserves `model.gguf`; `-Force` only replaces KoboldCpp. `-KoboldVariant` accepts `standard`, `nocuda`, or `oldpc`.
 
 ## Runtime and data
 
@@ -77,8 +68,8 @@ wraps it in an Inno Setup installer named `HyperFlux-Setup.exe`. The installer
 does not contain model weights or a KoboldCpp binary. On first launch, the
 setup wizard looks for common local asset locations and lets you browse for an
 existing GGUF/KoboldCpp executable; otherwise it offers the official KoboldCpp
-release and an explicitly selected, checksum-pinned Gemma download. A model is
-never silently substituted. Setup logs are written to
+release. Model weights must be selected locally and are never downloaded or
+silently substituted. Setup logs are written to
 `%LOCALAPPDATA%\HyperFlux\logs\setup.log`, and user assets/settings are kept
 outside the application install directory.
 
@@ -105,13 +96,12 @@ legal notice checks have passed.
 ### Download and disk-space estimate
 
 The local Windows build measured about **158 MiB** for `HyperFlux-Setup.exe`
-and **609 MiB** for the installed desktop payload. The pinned Gemma model is
-**2,489,758,112 bytes (2.49 GB / 2.32 GiB)**. KoboldCpp is fetched separately
-from its current official release; its size varies by release (the local
-checkout's existing copy is about 607 MiB). Model downloads require a further
-64 MiB free-space margin for safe staging. For a fresh install that downloads
-both assets, reserve roughly **4–5 GB** across installer, installed app, model,
-and KoboldCpp. Existing valid assets avoid their respective downloads.
+and **609 MiB** for the installed desktop payload. The current local Gemma 4
+E2B Q4_K_M model is about **3.43 GB (3.19 GiB)** and is not included in releases.
+KoboldCpp is fetched separately from its current official release; its size
+varies by release (the local checkout's existing copy is about 607 MiB). For
+a fresh install, reserve roughly **4.5 GB** for the installer, installed app,
+local model, and KoboldCpp.
 
 See [LICENSES.md](./LICENSES.md) for the release-blocking third-party license
 review checklist and [release-notes/TEMPLATE.md](./release-notes/TEMPLATE.md)

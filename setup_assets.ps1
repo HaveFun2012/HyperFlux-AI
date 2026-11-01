@@ -1,9 +1,8 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$PythonVersion = "3.14.8",
     [ValidateSet("standard", "nocuda", "oldpc")]
     [string]$KoboldVariant = "standard",
-    [string]$HuggingFaceToken = $env:HF_TOKEN,
     [switch]$Force
 )
 
@@ -14,14 +13,24 @@ $PythonDirectory = Join-Path $ProjectRoot "python_embed"
 $RequirementsFile = Join-Path $ProjectRoot "requirements.txt"
 $ModelPath = Join-Path $ProjectRoot "model.gguf"
 $KoboldPath = Join-Path $ProjectRoot "koboldcpp.exe"
-$ModelRepository = "ggml-org/gemma-3-4b-it-GGUF"
-$ModelRevision = "d0976223747697cb51e056d85c532013931fe52e"
-$ModelFilename = "gemma-3-4b-it-Q4_K_M.gguf"
-$ModelSha256 = "4996030242583a40aa151ff93f49ed787ac8c25e4120c3ae4588b2e2a7d1ae94"
-$ModelSize = 2489758112
 
 function Get-Sha256($Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Test-Gguf($Path) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $false
+    }
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $header = New-Object byte[] 4
+        $length = $stream.Read($header, 0, $header.Length)
+        return $length -eq 4 -and [Text.Encoding]::ASCII.GetString($header) -eq "GGUF"
+    }
+    finally {
+        $stream.Dispose()
+    }
 }
 
 function Invoke-VerifiedDownload($Uri, $Destination, $ExpectedSha256, $ExpectedSize) {
@@ -141,6 +150,10 @@ if (-not (Test-Path -LiteralPath $RequirementsFile)) {
     throw "requirements.txt is missing from the project root."
 }
 
+if (-not (Test-Gguf $ModelPath)) {
+    throw "A valid GGUF model is required at '$ModelPath'. Setup does not download or substitute model files."
+}
+
 Install-PythonRuntime
 
 if ((Test-Path -LiteralPath $KoboldPath) -and -not $Force) {
@@ -150,38 +163,6 @@ else {
     Get-KoboldAsset
 }
 
-if ((Test-Path -LiteralPath $ModelPath) -and -not $Force) {
-    $existingHash = Get-Sha256 $ModelPath
-    if ($existingHash -eq $ModelSha256) {
-        Write-Host "Existing model.gguf matches the pinned Gemma 3 4B IT Q4_K_M file."
-    }
-    else {
-        Write-Warning "Keeping existing model.gguf; it differs from the pinned ggml-org file. Use -Force to replace it."
-    }
-}
-else {
-    $modelUrl = "https://huggingface.co/$ModelRepository/resolve/$ModelRevision/$ModelFilename?download=true"
-    $headers = @{}
-    if ($HuggingFaceToken) {
-        $headers.Authorization = "Bearer $HuggingFaceToken"
-    }
-    $temporaryModel = "$ModelPath.download"
-    try {
-        Write-Host "Downloading Gemma 3 4B IT Q4_K_M from Hugging Face (about 2.5 GB)..."
-        Invoke-WebRequest -Uri $modelUrl -Headers $headers -OutFile $temporaryModel -UseBasicParsing
-        if ((Get-Item -LiteralPath $temporaryModel).Length -ne $ModelSize) {
-            throw "Downloaded model size does not match the pinned repository metadata."
-        }
-        if ((Get-Sha256 $temporaryModel) -ne $ModelSha256) {
-            throw "Gemma GGUF SHA-256 verification failed."
-        }
-        Move-Item -LiteralPath $temporaryModel -Destination $ModelPath -Force
-    }
-    finally {
-        if (Test-Path -LiteralPath $temporaryModel) {
-            Remove-Item -LiteralPath $temporaryModel -Force
-        }
-    }
-}
+Write-Host "Keeping the existing GGUF model; setup never replaces model.gguf."
 
 Write-Host "HyperFlux runtime setup is complete."

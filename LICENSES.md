@@ -24,10 +24,10 @@ included with the installer.
   release when no compatible user-selected copy exists. Review the exact
   version's license and redistribution/source-notice requirements. Do not
   bundle its binary until that review is complete.
-- **Gemma 3 GGUF:** the pinned file is a third-party conversion hosted by
-  `ggml-org/gemma-3-4b-it-GGUF`, not a Google-published GGUF. Review Google's
-  Gemma terms and the repository's hosting/conversion terms. The model must
-  remain an explicit user choice and must not be included in the installer.
+- **Gemma 4 E2B Q4_K_M GGUF:** the local model file is user-provided and is
+  not included in the installer or source repository. Confirm its exact
+  hosting/conversion source and review the applicable Gemma and host terms
+  before use or redistribution.
 
 ## Release checklist
 
