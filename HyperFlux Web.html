@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>HyperFlux - HyperFlux Gemma3 Flash 1</title>
+<title>HyperFlux - HyperFlux Gemma4 Flash 1</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
@@ -303,7 +303,7 @@ body{font-family:var(--font);font-size:14px;line-height:1.6;color:var(--t1);back
         </div>
         <div class="logo-copy">
           <div class="logo-name">HyperFlux</div>
-          <div class="logo-sub">Gemma3 Flash 1</div>
+          <div class="logo-sub">Gemma4 Flash 1</div>
         </div>
       </div>
       <button class="btn-new" onclick="HF.newChat()"><i class="fas fa-plus"></i><span>New chat</span></button>
@@ -329,7 +329,7 @@ body{font-family:var(--font);font-size:14px;line-height:1.6;color:var(--t1);back
     <div class="chat-card panel home-active" id="chatCard">
       <div class="home" id="homeView">
         <div class="home-inner">
-          <div class="eyebrow" id="homeVersion">HYPERFLUX · HYPERFLUX GEMMA3 FLASH 1</div>
+          <div class="eyebrow" id="homeVersion">HYPERFLUX · HYPERFLUX GEMMA4 FLASH 1</div>
           <div class="home-greeting" id="homeGreeting">Good afternoon, there</div>
           <div class="home-h">How can I help?</div>
           <div class="home-sub">Your local AI workspace. Chat privately with the model connected through Kobold - HyperFlux Server.</div>
@@ -343,7 +343,7 @@ body{font-family:var(--font);font-size:14px;line-height:1.6;color:var(--t1);back
             <div class="release-head">
               <h2 class="release-title" id="releaseTitle">What's new in Flash 1</h2>
               <div class="release-controls">
-                <span class="version-badge" id="releaseBadge">HyperFlux Gemma3 Flash 1</span>
+                <span class="version-badge" id="releaseBadge">HyperFlux Gemma4 Flash 1</span>
                 <span class="release-page" id="releasePage">1 / 2</span>
                 <button class="release-control" type="button" aria-label="Show previous release notes" title="Previous release notes" onclick="HF.changeReleaseNotes(-1)"><i class="fas fa-chevron-left"></i></button>
                 <button class="release-control" type="button" aria-label="Show next release notes" title="Next release notes" onclick="HF.changeReleaseNotes(1)"><i class="fas fa-chevron-right"></i></button>
@@ -573,7 +573,7 @@ var currentReleaseIndex = 0;
 var releaseNotes = [
   {
     title: "What's new in Flash 1",
-    badge: 'HyperFlux Gemma3 Flash 1',
+    badge: 'HyperFlux Gemma4 Flash 1',
     footer: 'FLASH 1 RELEASE NOTES · WEB FEATURES',
     features: [
       'Local live web search, with current results added to the model prompt.',
@@ -588,7 +588,7 @@ var releaseNotes = [
   },
   {
     title: "What's new in Gen 1",
-    badge: 'HyperFlux Gen 1 Gemma3',
+    badge: 'HyperFlux Gen 1 Gemma4',
     footer: 'GEN 1 RELEASE NOTES · TERMINAL FEATURES',
     features: [
       'Rich terminal chat with live streamed responses and readable Markdown.',
@@ -850,7 +850,7 @@ function removeUnrequestedAssistantSignature(reply, prompt) {
       .test(prompt);
   if (!asksIdentity) {
     reply = reply.replace(/^\s*HyperFlux[.!:]\s*/i, '');
-    reply = reply.replace(/\n\s*HyperFlux Gemma3 Flash 1\s*$/i, '');
+    reply = reply.replace(/\n\s*HyperFlux Gemma4 Flash 1\s*$/i, '');
   }
   return reply.trim();
 }
@@ -858,10 +858,10 @@ function removeUnrequestedAssistantSignature(reply, prompt) {
 function buildSessionPrompt(messages, prompt, attachment) {
   var systemInstruction = [
     "You are HyperFlux, a local assistant. If asked who or what you are, identify yourself only as HyperFlux.",
-    "Do not volunteer an interface or model label, or describe yourself as the web, browser, or terminal version. Only if the user specifically asks which interface/model label is active, give the active label: HyperFlux Gemma3 Flash 1. Never call it the web, browser, or terminal version.",
-    "If asked which interface is the main or original HyperFlux, answer HyperFlux Gen 1 Gemma3; HyperFlux Gemma3 Flash 1 is its companion interface.",
+    "Do not volunteer an interface or model label, or describe yourself as the web, browser, or terminal version. Only if the user specifically asks which interface/model label is active, give the active label: HyperFlux Gemma4 Flash 1. Never call it the web, browser, or terminal version.",
+    "If asked which interface is the main or original HyperFlux, answer HyperFlux Gen 1 Gemma4; HyperFlux Gemma4 Flash 1 is its companion interface.",
     "Do not append a sign-off, signature, assistant name, or interface/model label to your answers. Mention your identity or interface/model label only when the user directly asks.",
-    "HyperFlux Gemma3 Flash 1 and HyperFlux Gen 1 Gemma3 are interface labels, not evidence of separate models or different intelligence. Both interfaces use the model currently loaded by the local Kobold - HyperFlux Server. Do not claim one label is smarter, more balanced, or better at reasoning or creativity without verified evidence. Explain differences only in terms of known tools or instructions, and recommend based on the user's needs.",
+    "HyperFlux Gemma4 Flash 1 and HyperFlux Gen 1 Gemma4 are interface labels, not evidence of separate models or different intelligence. Both interfaces use the model currently loaded by the local Kobold - HyperFlux Server. Do not claim one label is smarter, more balanced, or better at reasoning or creativity without verified evidence. Explain differences only in terms of known tools or instructions, and recommend based on the user's needs.",
     "The terminal and web interfaces have separate conversation histories. Never claim to remember messages from the other interface unless they are included here.",
     "Be a thoughtful, capable, conversational assistant: friendly, clear, grounded, and natural without sounding scripted or overly enthusiastic.",
     "Lead with the direct answer, then add the most useful explanation. Match the user's requested level of detail; use headings, lists, examples, and code blocks when they improve clarity, not by default.",
@@ -1205,7 +1205,7 @@ function appendMsgToDOM(role, text, attachment) {
     aiNode.innerHTML = 
       '<div class="a-ava" aria-hidden="true"><img class="flash-model-logo-img" src="logo_hyperflux/hyperfluxdesktop.png" alt=""></div>' +
       '<div class="a-body">' +
-        '<div class="a-head"><span class="a-name">HyperFlux</span><span class="a-badge">Gemma3 Flash 1</span></div>' +
+        '<div class="a-head"><span class="a-name">HyperFlux</span><span class="a-badge">Gemma4 Flash 1</span></div>' +
         '<div class="a-card"><div class="a-content">' + renderMarkdown(text) + '</div></div>' +
       '</div>';
     feed.appendChild(aiNode);
@@ -1482,7 +1482,7 @@ var HF = (function(){
       aiNode.innerHTML = 
         '<div class="a-ava" aria-hidden="true"><img class="flash-model-logo-img" src="logo_hyperflux/hyperfluxdesktop.png" alt=""></div>' +
         '<div class="a-body">' +
-          '<div class="a-head"><span class="a-name">HyperFlux</span><span class="a-badge">Gemma3 Flash 1</span></div>' +
+          '<div class="a-head"><span class="a-name">HyperFlux</span><span class="a-badge">Gemma4 Flash 1</span></div>' +
           '<div class="a-card"><div class="a-content" id="content-' + aiRowId + '">Thinking...</div></div>' +
         '</div>';
       feed.appendChild(aiNode);

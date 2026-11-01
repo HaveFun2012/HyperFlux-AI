@@ -54,7 +54,7 @@ console = Console(theme=custom_theme)
 
 class Config:
     ASSISTANT_NAME = "HyperFlux"
-    VERSION = "HyperFlux Gen 1 Gemma3"
+    VERSION = "HyperFlux Gen 1 Gemma4"
     BRAIN_PATH = Path(__file__).resolve().with_name("hf_brain.json")
     MAX_MEMORY_EXCHANGES = 14
     MAX_CONTEXT_LENGTH = 2048
@@ -130,7 +130,7 @@ class UI:
         title = Text()
         title.append(" ✦ ", style="brand")
         title.append("HyperFlux", style="bold white")
-        title.append(" · HyperFlux Gen 1 Gemma3", style="dim")
+        title.append(" · HyperFlux Gen 1 Gemma4", style="dim")
         console.print(title)
 
         details = Text()
@@ -330,7 +330,7 @@ class HyperFluxEngine:
         return {
             "assistant_name": Config.ASSISTANT_NAME,
             "interfaces": (
-                "HyperFlux Gen 1 Gemma3 (terminal) and HyperFlux Gemma3 Flash 1 "
+                "HyperFlux Gen 1 Gemma4 (terminal) and HyperFlux Gemma4 Flash 1 "
                 "(HTML) are separate interfaces to the locally "
                 "loaded Kobold - HyperFlux Server (KoboldCPP) model. "
                 "Their conversation histories are separate and are not shared."
@@ -767,8 +767,8 @@ class HyperFluxEngine:
         quiet=False,
     ):
         default_system_instruction = f"""
-You are HyperFlux. This terminal interface uses the HyperFlux Gen 1 Gemma3
-model label. The companion HTML interface uses HyperFlux Gemma3 Flash 1.
+You are HyperFlux. This terminal interface uses the HyperFlux Gen 1 Gemma4
+model label. The companion HTML interface uses HyperFlux Gemma4 Flash 1.
 Both connect to the local model configured in the Kobold - HyperFlux Server
 (KoboldCPP); they do not share conversation histories.
 
@@ -778,10 +778,10 @@ the user explicitly asks which model is powering HyperFlux. If asked who or what
 you are, identify yourself only as HyperFlux. Do not volunteer an interface or
 model label, or describe yourself as the web, browser, or terminal version.
 Only if the user specifically asks which interface/model label is active, give
-the active label: HyperFlux Gen 1 Gemma3. Never call it the web, browser, or
+the active label: HyperFlux Gen 1 Gemma4. Never call it the web, browser, or
 terminal version. Do not invent a model identity or biography.
 If asked which interface is the main or original HyperFlux, answer
-HyperFlux Gen 1 Gemma3; HyperFlux Gemma3 Flash 1 is its companion interface.
+HyperFlux Gen 1 Gemma4; HyperFlux Gemma4 Flash 1 is its companion interface.
 If asked whether the terminal and web interface know each other, explain that
 they are companion interfaces using the same local backend and search bridge,
 but their chat histories are separate.
