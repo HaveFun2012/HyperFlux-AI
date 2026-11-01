@@ -2,6 +2,16 @@
 title HyperFlux AI Desktop
 cd /d "%~dp0"
 
+if exist "%~dp0HyperFlux.exe" (
+    start "HyperFlux AI" "%~dp0HyperFlux.exe"
+    exit /b 0
+)
+
+if exist "%~dp0dist\HyperFlux\HyperFlux.exe" (
+    start "HyperFlux AI" "%~dp0dist\HyperFlux\HyperFlux.exe"
+    exit /b 0
+)
+
 if not exist "python_embed\pythonw.exe" (
     echo Python runtime is missing. Run setup_assets.ps1 first.
     pause

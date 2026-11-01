@@ -4,7 +4,8 @@ HyperFlux AI is a local Windows assistant built around a GGUF model served by Ko
 
 ## Project components
 
-- `hyperflux_desktop.py` — desktop window embedding the shared `HyperFlux Web.html` interface.
+- `dist\HyperFlux\HyperFlux.exe` — packaged desktop app; the Inno Setup installer creates shortcuts to this executable.
+- `hyperflux_desktop.py` — desktop source entry point for development and fallback launches.
 - `hyperflux_interacter.py` — preserved terminal interface and reusable chat/search logic.
 - `hyperflux_server.py` — local search bridge used by both interfaces.
 - `HyperFlux Web.html` — shared web interface, embedded by the desktop app or opened directly in a browser.
@@ -43,7 +44,7 @@ On Windows 10 or 11, with PowerShell and internet access:
 
    Do not store a token in the repository or commit it.
 
-4. Start `Start_HyperFlux_Server.bat` to launch KoboldCpp and the search bridge. Then start the desktop application with `Run_HyperFlux.bat`, or use `Run_HyperFlux_Terminal.bat` for the preserved terminal interface.
+4. For a release install, launch HyperFlux from its Start Menu or desktop shortcut. The packaged `.exe` hosts the same `HyperFlux Web.html` interface and starts the selected local services. For a source checkout, `Run_HyperFlux.bat` prefers a built executable when available and otherwise falls back to Python; `Run_HyperFlux_Terminal.bat` retains the terminal interface. `Start_HyperFlux_Server.bat` remains available for manual development runs.
 
 The setup script downloads approximately 3 GB of model and server assets, in addition to the runtime and dependencies. Ensure adequate disk space and bandwidth. It keeps existing `koboldcpp.exe` and `model.gguf` files by default. Use `-Force` to replace them with the script's official-release KoboldCpp binary and pinned Gemma file. `-KoboldVariant` accepts `standard`, `nocuda`, or `oldpc`.
 
