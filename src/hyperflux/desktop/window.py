@@ -15,7 +15,12 @@ from PySide6.QtNetwork import QTcpSocket
 from PySide6.QtWidgets import QMainWindow, QMessageBox
 
 from hyperflux.desktop.migration import migration_script as build_migration_script
-from hyperflux.paths import DESKTOP_LOGO, WEB_INTERFACE, user_data_directory
+from hyperflux.paths import (
+    DESKTOP_LOGO,
+    KOBOLD_LOG_PATH,
+    WEB_INTERFACE,
+    user_data_directory,
+)
 
 
 class HyperFluxWindow(QMainWindow):
@@ -119,8 +124,13 @@ class HyperFluxWindow(QMainWindow):
         if not model_running:
             executable = self.runtime_config["kobold_path"]
             model = self.runtime_config["model_path"]
+            KOBOLD_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
             self._kobold_process = QProcess(self)
             self._kobold_process.setWorkingDirectory(str(user_data_directory()))
+            self._kobold_process.setProcessChannelMode(
+                QProcess.ProcessChannelMode.MergedChannels
+            )
+            self._kobold_process.setStandardOutputFile(str(KOBOLD_LOG_PATH))
             self._kobold_process.errorOccurred.connect(
                 lambda error: self.service_error.emit(
                     f"Could not start KoboldCpp ({error.name}). "
@@ -176,4 +186,3 @@ class HyperFluxWindow(QMainWindow):
                 self._kobold_process.kill()
                 self._kobold_process.waitForFinished(1000)
         super().closeEvent(event)
-

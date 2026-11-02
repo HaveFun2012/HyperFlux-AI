@@ -84,3 +84,24 @@ def clean_response(text):
         text,
         flags=re.IGNORECASE,
     )
+
+
+def split_reasoning_summary(text, allow_reasoning=True):
+    """Keep only the explicitly requested summary; discard native hidden thoughts."""
+    text = re.sub(
+        r"<think(?:ing)?\b[^>]*>[\s\S]*?(?:</think(?:ing)?>|$)",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    reasoning = ""
+    match = re.search(
+        r"<reasoning\b[^>]*>([\s\S]*?)(?:</reasoning\s*>|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        reasoning = match.group(1).strip()
+        text = text[:match.start()] + text[match.end():]
+    text = re.sub(r"</?reasoning\b[^>]*>", "", text, flags=re.IGNORECASE).strip()
+    return (reasoning if allow_reasoning else ""), text

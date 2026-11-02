@@ -57,6 +57,8 @@ The setup script downloads the runtime and KoboldCpp, but not model weights. Ens
 - KoboldCpp model API: `http://localhost:5001`
 - Search bridge API: `http://127.0.0.1:5002`
 - Desktop chat history, settings, and embedded-browser data are stored under `%LOCALAPPDATA%\HyperFlux`.
+- KoboldCpp output is written to `%LOCALAPPDATA%\HyperFlux\logs\kobold.log` and is available from the **Server logs** button beside the server status.
+- Normal model replies include a collapsed **Thinking summary** that can be opened or hidden; greetings and direct name questions skip it. The summary is a brief user-facing rationale, not private chain-of-thought.
 - The embedded desktop interface and the browser interface keep separate `localStorage` histories and settings.
 - The terminal and desktop app retain separate chat histories.
 

@@ -7,13 +7,19 @@ import json
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import requests
+
+from hyperflux.paths import KOBOLD_LOG_PATH
+
+_LOG_TAIL_BYTES = 64 * 1024
 
 
 class _SearchBridgeHandler(BaseHTTPRequestHandler):
     engine = None
     result_count = 3
+    kobold_log_path = KOBOLD_LOG_PATH
 
     def _origin_is_allowed(self):
         origin = self.headers.get("Origin", "")
@@ -39,6 +45,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
@@ -51,10 +58,34 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path != "/health":
+        if self.path == "/health":
+            self._send_json(200, {"status": "ok", "service": "HyperFlux search"})
+            return
+        if self.path != "/kobold-logs":
             self._send_json(404, {"error": "Not found."})
             return
-        self._send_json(200, {"status": "ok", "service": "HyperFlux search"})
+        if not self._origin_is_allowed():
+            self._send_json(403, {"error": "Origin not allowed."})
+            return
+
+        log_path = Path(self.kobold_log_path)
+        try:
+            with log_path.open("rb") as source:
+                source.seek(0, 2)
+                size = source.tell()
+                truncated = size > _LOG_TAIL_BYTES
+                source.seek(max(0, size - _LOG_TAIL_BYTES))
+                text = source.read(_LOG_TAIL_BYTES).decode("utf-8", errors="replace")
+        except FileNotFoundError:
+            self._send_json(200, {"available": False, "text": ""})
+            return
+        except OSError:
+            self._send_json(500, {"error": "Could not read the KoboldCpp log."})
+            return
+
+        if truncated:
+            text = "[Earlier log output omitted. Showing the most recent 64 KiB.]\n" + text
+        self._send_json(200, {"available": True, "text": text})
 
     def do_POST(self):
         if self.path != "/search":

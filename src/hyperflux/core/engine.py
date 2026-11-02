@@ -20,6 +20,8 @@ from hyperflux.core.prompts import (
     build_capabilities,
     build_search_prompt,
     build_system_instruction,
+    build_thinking_instruction,
+    is_thinking_exempt,
 )
 from hyperflux.search import text as search_text
 from hyperflux.search.web_search import search_web as run_web_search
@@ -130,6 +132,8 @@ class HyperFluxEngine:
         system_instruction = self.system_instruction or build_system_instruction(
             self.get_capabilities()
         )
+        allow_reasoning = not is_thinking_exempt(user_prompt)
+        system_instruction += "\n\n" + build_thinking_instruction(user_prompt)
         full_context_prompt = self._build_context_prompt(system_instruction, user_prompt)
         self.last_context_tokens = math.ceil(
             len(full_context_prompt) / Config.ESTIMATED_CHARS_PER_TOKEN
@@ -156,10 +160,15 @@ class HyperFluxEngine:
             )
             with live_context as live:
                 def on_token(partial_response):
+                    reasoning, answer = kobold.split_reasoning_summary(
+                        partial_response,
+                        allow_reasoning,
+                    )
+                    visible_response = _format_reasoning_response(reasoning, answer)
                     if token_callback is not None:
-                        token_callback(partial_response)
+                        token_callback(visible_response)
                     if live is not None:
-                        live.update(UI.assistant_panel(partial_response), refresh=True)
+                        live.update(UI.assistant_panel(visible_response), refresh=True)
 
                 response_text = kobold.stream_generate(payload, on_token)
                 streamed = response_text is not None
@@ -169,6 +178,10 @@ class HyperFluxEngine:
                     response_text = kobold.generate(payload)
 
                 response_text = kobold.clean_response(response_text)
+                reasoning, response_text = kobold.split_reasoning_summary(
+                    response_text,
+                    allow_reasoning,
+                )
                 elapsed = time.perf_counter() - generation_started
                 generated_tokens_estimate = math.ceil(
                     len(response_text) / Config.ESTIMATED_CHARS_PER_TOKEN
@@ -182,12 +195,17 @@ class HyperFluxEngine:
                         f"snippets directly:\n\n{search_fallback}"
                     )
                 if token_callback is not None and not streamed:
-                    token_callback(response_text)
+                    token_callback(_format_reasoning_response(reasoning, response_text))
                 if live is not None:
-                    live.update(UI.assistant_panel(response_text), refresh=True)
+                    live.update(
+                        UI.assistant_panel(
+                            _format_reasoning_response(reasoning, response_text)
+                        ),
+                        refresh=True,
+                    )
             self.response_rendered_live = live is not None
             self._remember_exchange(user_prompt, response_text)
-            return response_text
+            return _format_reasoning_response(reasoning, response_text)
         except (requests.exceptions.RequestException, ValueError, KeyError, TypeError) as e:
             return f"[error]Pipeline Error: {str(e)}[/error]"
 
@@ -239,3 +257,9 @@ class HyperFluxEngine:
             token_callback=token_callback,
             quiet=quiet,
         )
+
+
+def _format_reasoning_response(reasoning, answer):
+    if not reasoning:
+        return answer
+    return f"**Thinking summary**\n\n{reasoning}\n\n{answer}"

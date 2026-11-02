@@ -23,3 +23,6 @@ def user_data_directory():
     local_app_data = os.environ.get("LOCALAPPDATA")
     root = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
     return root / "HyperFlux"
+
+
+KOBOLD_LOG_PATH = user_data_directory() / "logs" / "kobold.log"

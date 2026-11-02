@@ -19,8 +19,13 @@ if not exist "model.gguf" (
     exit /b 1
 )
 
+if not defined LOCALAPPDATA set "LOCALAPPDATA=%USERPROFILE%\AppData\Local"
+set "LOG_DIR=%LOCALAPPDATA%\HyperFlux\logs"
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
+set "KOBOLD_LOG=%LOG_DIR%\kobold.log"
+
 echo Starting KoboldCpp on port 5001...
-start "HyperFlux KoboldCpp server" /b koboldcpp.exe --model model.gguf --port 5001 --skiplaunch
+start "HyperFlux KoboldCpp server" /b koboldcpp.exe --model model.gguf --port 5001 --skiplaunch > "%KOBOLD_LOG%" 2>&1
 timeout /t 5 /nobreak > nul
 
 echo Starting the local search bridge on port 5002...

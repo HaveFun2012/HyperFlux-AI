@@ -6,6 +6,41 @@ from datetime import datetime
 
 from hyperflux.config import Config
 
+_GREETING_ONLY = re.compile(
+    r"^(?:hi|hello|hey|hiya|howdy)(?: there| hyperflux)?[.!?,\s]*$|"
+    r"^good (?:morning|afternoon|evening|night)[.!?,\s]*$",
+    re.IGNORECASE,
+)
+_NAME_QUESTION_ONLY = re.compile(
+    r"^(?:(?:hi|hello|hey|hiya|howdy)(?: there| hyperflux)?[,!\s]+)?"
+    r"(?:what(?:'s| is) your name|who are you|what should i call you|what do i call you)"
+    r"[?.!\s]*$",
+    re.IGNORECASE,
+)
+
+
+def is_thinking_exempt(user_input):
+    normalized = " ".join(str(user_input).split())
+    return bool(
+        _GREETING_ONLY.fullmatch(normalized)
+        or _NAME_QUESTION_ONLY.fullmatch(normalized)
+    )
+
+
+def build_thinking_instruction(user_input):
+    if is_thinking_exempt(user_input):
+        return (
+            "For this greeting or direct name question, answer naturally and "
+            "briefly without a reasoning summary."
+        )
+    return (
+        "Thinking mode is enabled. Before the answer, emit a short, "
+        "user-facing reasoning summary in <reasoning>...</reasoning> tags. "
+        "Keep it to 1-3 concise sentences describing the approach or key "
+        "checks, not private chain-of-thought, hidden scratch work, or "
+        "token-by-token thoughts. Then give the answer outside those tags."
+    )
+
 
 def build_capabilities(model_name):
     return {
