@@ -1715,16 +1715,19 @@ function renderMarkdown(text) {
     closeQuote();
 
     var unordered = trimmed.match(/^[-*+]\s+(.+)$/);
-    var ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    var ordered = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
     if (unordered || ordered) {
       flushParagraph();
       var nextType = unordered ? 'ul' : 'ol';
       if (listType !== nextType) {
         closeList();
-        html.push('<' + nextType + '>');
+        // Keep the model's numbering when a list resumes after a paragraph
+        // ("3. ..." must not restart at 1).
+        var start = ordered && Number(ordered[1]) !== 1 ? ' start="' + Number(ordered[1]) + '"' : '';
+        html.push('<' + nextType + start + '>');
         listType = nextType;
       }
-      html.push('<li>' + renderInlineMarkdown((unordered || ordered)[1]) + '</li>');
+      html.push('<li>' + renderInlineMarkdown(unordered ? unordered[1] : ordered[2]) + '</li>');
       return;
     }
 
@@ -1790,6 +1793,9 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
   var previousDetails = contentNode.querySelector('.reasoning-details');
   var previousScroll = previousDetails ? previousDetails.querySelector('.reasoning-summary') : null;
   var userChoice = contentNode.dataset.thinkingUserChoice;
+  // Hold the current height while rebuilding. Otherwise the reply is briefly empty,
+  // the chat shrinks, and the browser pulls the scroll position up to the question.
+  contentNode.style.minHeight = contentNode.offsetHeight + 'px';
   contentNode.replaceChildren();
   if (reasoning) {
     var details = mk('details', 'reasoning-details' + (thinking.active ? ' thinking-active' : ''));
@@ -1820,6 +1826,7 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
     answer.innerHTML = renderMarkdown(text);
   }
   contentNode.appendChild(answer);
+  contentNode.style.minHeight = '';
 }
 
 function formatThoughtSeconds(seconds) {
@@ -2230,6 +2237,9 @@ var HF = (function(){
         var continuations = 0;
         var contentNode = document.getElementById('content-' + aiRowId);
         var renderScheduled = false;
+        // Set once the final answer is drawn: a streaming redraw still queued for the
+        // next frame must not overwrite it (it would drop the thinking box and jump the scroll).
+        var streamFinished = false;
         if (contentNode) contentNode.classList.add('streaming');
 
         function scheduleStreamRender() {
@@ -2237,7 +2247,7 @@ var HF = (function(){
           renderScheduled = true;
           requestAnimationFrame(function() {
             renderScheduled = false;
-            if (currentSessionId !== requestSessionId || !contentNode) return;
+            if (streamFinished || currentSessionId !== requestSessionId || !contentNode) return;
             var parsed = splitAssistantResponse(reply, !thinkingExempt);
             if (parsed.reasoning && parsed.thinkingDone && thoughtSeconds === null) {
               thoughtSeconds = (performance.now() - generationStarted) / 1000;
@@ -2277,6 +2287,7 @@ var HF = (function(){
           });
         }
         if (!reply.trim()) reply = 'No response.';
+        streamFinished = true;
         var parsedResponse = splitAssistantResponse(
           reply.replace(/<end_of_turn>|<turn\|>/g, ""),
           !thinkingExempt
@@ -2298,8 +2309,12 @@ var HF = (function(){
 
         var finalContentNode = document.getElementById('content-' + aiRowId);
         if (currentSessionId === requestSessionId && finalContentNode) {
+          // The final render can change the reply's height; keep the reader where they are.
+          var stickAtEnd = feedNearBottom(feed);
+          var scrollBefore = feed.scrollTop;
           renderAssistantContent(finalContentNode, reply, reasoning, false, {seconds: thoughtSeconds});
           finalContentNode.classList.remove('streaming');
+          feed.scrollTop = stickAtEnd ? feed.scrollHeight : scrollBefore;
         }
         
         sess.messages.push({
@@ -2310,8 +2325,11 @@ var HF = (function(){
         });
         saveSessions();
         finalizeAiNode(document.getElementById(aiRowId), reply);
+        // The Copy/Retry bar adds height below the answer; stay at the very end.
+        if (stickAtEnd) feed.scrollTop = feed.scrollHeight;
 
       } catch(err) {
+        streamFinished = true;  // no queued streaming redraw may overwrite what's shown below
         var errorContentNode = document.getElementById('content-' + aiRowId);
         if (err && err.name === 'AbortError') {
           // Stopped by the user: keep whatever was written so far, like Claude.
