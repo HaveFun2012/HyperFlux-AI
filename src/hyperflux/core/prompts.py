@@ -198,14 +198,10 @@ MATH_INSTRUCTIONS = (
     "- Preserve every value, variable, and operation from the user's "
     "problem unless the user explicitly asks to change it. Do not "
     "substitute values from formatting instructions.\n"
-    "- When showing a fraction, put the complete numerator on its own "
-    "line, then a continuous horizontal separator on the next line, "
-    "then the complete denominator on the following line. Keep the "
-    "three parts vertically aligned and leave a blank line before and "
-    "after the fraction.\n"
-    "- Do not place the numerator, separator, and denominator on one "
-    "line. Do not add example values or alter the expression merely "
-    "to demonstrate the layout."
+    "- Write all math in LaTeX: $...$ for inline math and $$...$$ for "
+    "displayed equations, each displayed equation on its own line. Write "
+    "fractions as \\frac{a}{b}, multiplication as \\times, division as "
+    "\\div, and roots as \\sqrt{x}. Never put math inside code blocks."
 )
 
 

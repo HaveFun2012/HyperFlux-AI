@@ -17,6 +17,7 @@ included with the installer.
 | ddgs | Optional web-search provider | Include its license and notices for transitive packages. |
 | PyInstaller | Build tool; output bootloader is distributed | Include the applicable bootloader license notice. |
 | Inno Setup | Installer compiler | Confirm distribution terms for the generated installer and include required notices. |
+| KaTeX 0.16.11 | Maths rendering in the web interface, bundled in `src/web/vendor/katex/` (MIT; from the npm registry, SHA-1 `4bc84d5584f996abece5f01c6ad11304276a33f5`) | MIT license text is included as `src/web/vendor/katex/LICENSE`; keep it with the bundled files. |
 
 ## Optional runtime assets
 

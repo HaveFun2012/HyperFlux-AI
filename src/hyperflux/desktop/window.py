@@ -26,6 +26,20 @@ from hyperflux.paths import (
 )
 
 
+def apply_page_settings(page):
+    """Settings the web interface needs. Shared with the smoke test so it checks the same setup."""
+    attributes = QWebEngineSettings.WebAttribute
+    settings = page.settings()
+    settings.setAttribute(attributes.LocalStorageEnabled, True)
+    # The page is a local file that calls KoboldCpp (5001) and the bridge (5002).
+    settings.setAttribute(attributes.LocalContentCanAccessRemoteUrls, True)
+    # Must be set explicitly alongside the line above: otherwise Qt blocks the
+    # page's own local files (logo images, KaTeX script, styles, and fonts).
+    settings.setAttribute(attributes.LocalContentCanAccessFileUrls, True)
+    # Lets the Copy buttons write to the clipboard (writing only, no reading).
+    settings.setAttribute(attributes.JavascriptCanAccessClipboard, True)
+
+
 class HyperFluxWindow(QMainWindow):
     service_error = Signal(str)
 
@@ -58,14 +72,7 @@ class HyperFluxWindow(QMainWindow):
         )
 
         self.page = QWebEnginePage(self.profile, self)
-        self.page.settings().setAttribute(
-            QWebEngineSettings.WebAttribute.LocalStorageEnabled,
-            True,
-        )
-        self.page.settings().setAttribute(
-            QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls,
-            True,
-        )
+        apply_page_settings(self.page)
         self.page.newWindowRequested.connect(self._open_external_link)
 
         try:

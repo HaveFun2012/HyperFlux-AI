@@ -290,6 +290,11 @@ class HyperFluxCoreTests(unittest.TestCase):
         thinking, answer = split_reasoning_summary("<reasoning>I checked.</reasoning>Hi")
         self.assertEqual((thinking, answer), ("I checked.", "Hi"))
 
+    def test_thinking_parser_hides_half_received_markers(self):
+        self.assertEqual(split_thinking("<|chan"), ("", "", True))
+        self.assertEqual(split_thinking("The answer is 42.<tu")[1], "The answer is 42.")
+        self.assertEqual(split_thinking("Use a < b here")[1], "Use a < b here")
+
     def test_thinking_parser_reports_unfinished_thought(self):
         thinking, answer, done = split_thinking("<|channel>thought\nStill working")
         self.assertEqual((thinking, answer, done), ("Still working", "", False))

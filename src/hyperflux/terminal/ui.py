@@ -11,6 +11,8 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.theme import Theme
 
+from hyperflux.core.formatting import render_math_for_terminal
+
 custom_theme = Theme({
     "brand": "bold #A78BFA",
     "dim": "#94A3B8",
@@ -113,9 +115,11 @@ class UI:
             content.append(Text(status, style="dim"))
         if thinking:
             # Show only the latest lines so the panel doesn't grow off-screen.
-            recent = "\n".join(thinking.splitlines()[-THINKING_PREVIEW_LINES:])
+            recent = "\n".join(render_math_for_terminal(thinking).splitlines()[-THINKING_PREVIEW_LINES:])
             content.append(Text(recent, style="italic #94A3B8"))
         if text:
+            # The terminal can't draw LaTeX, so show maths as plain symbols (3/4 × 2).
+            text = render_math_for_terminal(text)
             content.append(Markdown(text, code_theme="monokai"))
         return Panel(
             Group(*content),

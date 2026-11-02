@@ -1,6 +1,6 @@
 import unittest
 
-from hyperflux.core.formatting import repair_collapsed_tables
+from hyperflux.core.formatting import latex_to_text, render_math_for_terminal, repair_collapsed_tables
 
 # A real one-line table the model produced.
 COLLAPSED = (
@@ -32,6 +32,25 @@ class TableRepairTests(unittest.TestCase):
     def test_odd_shapes_are_left_alone(self):
         broken = "| A | B | | :--- | :--- | | only one cell |"
         self.assertEqual(repair_collapsed_tables(broken), broken)
+
+
+class TerminalMathTests(unittest.TestCase):
+    def test_fractions_and_operators_become_readable_text(self):
+        self.assertEqual(
+            render_math_for_terminal(r"Result: $\frac{10 \div 2}{4 \div 2} = \frac{5}{2}$"),
+            "Result: (10 ÷ 2)/(4 ÷ 2) = 5/2",
+        )
+        self.assertEqual(render_math_for_terminal(r"$x^2 + \sqrt{16}$"), "x² + √16")
+
+    def test_display_equations_get_their_own_lines(self):
+        text = render_math_for_terminal(r"Step: $$\frac{3}{4}$$ $$\frac{5}{4}$$")
+        self.assertEqual(text, "Step:\n\n3/4\n\n5/4")
+
+    def test_prices_are_not_maths(self):
+        self.assertEqual(render_math_for_terminal("It costs $5 and $10."), "It costs $5 and $10.")
+
+    def test_nested_fraction(self):
+        self.assertEqual(latex_to_text(r"\frac{\frac{1}{2}}{3}"), "(1/2)/3")
 
 
 if __name__ == "__main__":

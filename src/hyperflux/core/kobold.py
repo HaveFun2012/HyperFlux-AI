@@ -114,8 +114,21 @@ def split_thinking(text):
             if not match.group(2):
                 thinking_done = False
             text = text[:match.start()] + text[match.end():]
-    answer = _STRAY_MARKERS.sub("", text).strip()
+    answer = _trim_partial_marker(_STRAY_MARKERS.sub("", text).rstrip()).strip()
     return "\n\n".join(t for t in thoughts if t), answer, thinking_done
+
+
+# Mid-stream (or after Ctrl+C) the text can end with half a marker, like "<|chan".
+_STREAM_MARKERS = ("<|channel>", "<channel|>", "<|turn>", "<turn|>", "<think>", "</think>",
+                   "<reasoning>", "</reasoning>")
+
+
+def _trim_partial_marker(text):
+    for marker in _STREAM_MARKERS:
+        for size in range(len(marker) - 1, 1, -1):
+            if text.endswith(marker[:size]):
+                return text[:-size]
+    return text
 
 
 def split_reasoning_summary(text, allow_reasoning=True):

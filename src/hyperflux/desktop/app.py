@@ -6,15 +6,17 @@ from PySide6.QtCore import QEventLoop, QTimer, QUrl
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from hyperflux.desktop.window import HyperFluxWindow
+from hyperflux.desktop.window import HyperFluxWindow, apply_page_settings
 from hyperflux.paths import DESKTOP_LOGO, WEB_INTERFACE
 
 
 def run_smoke_test():
-    """Load the web interface and check its logos render. Returns a process exit code."""
+    """Load the web interface with the real window's settings and check that its logos
+    and the maths renderer load. Returns a process exit code."""
     if not WEB_INTERFACE.is_file() or not DESKTOP_LOGO.is_file():
         return 2
     view = QWebEngineView()
+    apply_page_settings(view.page())
     loop = QEventLoop()
     result = []
     timeout = QTimer()
@@ -30,7 +32,7 @@ def run_smoke_test():
             "const logos = [...document.querySelectorAll("
             "'.hyperflux-logo-img, .flash-model-logo-img')];"
             "return logos.length > 0 && logos.every("
-            "image => image.complete && image.naturalWidth > 0);"
+            "image => image.complete && image.naturalWidth > 0) && typeof window.katex === 'object';"
             "})()",
             lambda loaded: (result.append(bool(loaded)), loop.quit()),
         )
