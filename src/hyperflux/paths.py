@@ -26,3 +26,5 @@ def user_data_directory():
 
 
 KOBOLD_LOG_PATH = user_data_directory() / "logs" / "kobold.log"
+# Secret that the desktop page must send to read KoboldCpp logs from the search bridge.
+BRIDGE_TOKEN_PATH = user_data_directory() / "bridge_token"

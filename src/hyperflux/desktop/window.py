@@ -1,5 +1,6 @@
 """Desktop window hosting the shared HyperFlux web interface."""
 
+import json
 import threading
 
 from PySide6.QtCore import QProcess, QUrl, Signal
@@ -15,6 +16,8 @@ from PySide6.QtNetwork import QTcpSocket
 from PySide6.QtWidgets import QMainWindow, QMessageBox
 
 from hyperflux.desktop.migration import migration_script as build_migration_script
+from hyperflux.desktop.process_tree import descendant_pids, terminate_pid
+from hyperflux.search.bridge import load_or_create_token
 from hyperflux.paths import (
     DESKTOP_LOGO,
     KOBOLD_LOG_PATH,
@@ -32,6 +35,7 @@ class HyperFluxWindow(QMainWindow):
         self._kobold_process = None
         self._search_server = None
         self._search_thread = None
+        self._shutting_down = False
         self.setWindowTitle("HyperFlux AI")
         self.resize(1360, 900)
         self.setMinimumSize(900, 620)
@@ -84,6 +88,17 @@ class HyperFluxWindow(QMainWindow):
             script.setSourceCode(migration_script)
             self.page.scripts().insert(script)
 
+        # Lets this page (and no website) read live KoboldCpp logs from the bridge.
+        token_script = QWebEngineScript()
+        token_script.setName("HyperFlux bridge token")
+        token_script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        token_script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        token_script.setRunsOnSubFrames(False)
+        token_script.setSourceCode(
+            f"window.HYPERFLUX_BRIDGE_TOKEN = {json.dumps(load_or_create_token())};"
+        )
+        self.page.scripts().insert(token_script)
+
         self.view = QWebEngineView(self)
         self.view.setPage(self.page)
         self.view.loadFinished.connect(self._page_loaded)
@@ -131,19 +146,8 @@ class HyperFluxWindow(QMainWindow):
                 QProcess.ProcessChannelMode.MergedChannels
             )
             self._kobold_process.setStandardOutputFile(str(KOBOLD_LOG_PATH))
-            self._kobold_process.errorOccurred.connect(
-                lambda error: self.service_error.emit(
-                    f"Could not start KoboldCpp ({error.name}). "
-                    "Reopen setup and check the selected executable."
-                )
-            )
-            self._kobold_process.finished.connect(
-                lambda exit_code, _status: self.service_error.emit(
-                    f"KoboldCpp stopped unexpectedly (exit code {exit_code})."
-                )
-                if exit_code != 0
-                else None
-            )
+            self._kobold_process.errorOccurred.connect(self._kobold_error)
+            self._kobold_process.finished.connect(self._kobold_finished)
             self._kobold_process.start(
                 executable,
                 ["--model", model, "--port", "5001", "--skiplaunch"],
@@ -155,6 +159,38 @@ class HyperFluxWindow(QMainWindow):
             daemon=True,
         )
         self._search_thread.start()
+
+    def _kobold_error(self, error):
+        # Crashes are reported once, by _kobold_finished.
+        if self._shutting_down or error == QProcess.ProcessError.Crashed:
+            return
+        if error == QProcess.ProcessError.FailedToStart:
+            message = (
+                "Could not start KoboldCpp. "
+                "Reopen setup and check the selected executable."
+            )
+        else:
+            message = f"KoboldCpp reported an error ({error.name}). See {KOBOLD_LOG_PATH}."
+        self.service_error.emit(message)
+
+    def _kobold_finished(self, exit_code, _status):
+        if self._shutting_down or exit_code == 0:
+            return
+        self.service_error.emit(
+            f"KoboldCpp stopped unexpectedly (exit code {exit_code}). See {KOBOLD_LOG_PATH}."
+        )
+
+    def _stop_kobold(self):
+        process = self._kobold_process
+        if process is None or process.state() == QProcess.ProcessState.NotRunning:
+            return
+        # The real server is a child of the launcher we started. Stop it first so
+        # the launcher exits on its own and deletes its unpacked temp folder.
+        for pid in descendant_pids(process.processId()):
+            terminate_pid(pid)
+        if not process.waitForFinished(5000):
+            process.kill()
+            process.waitForFinished(1000)
 
     def _run_search_bridge(self):
         try:
@@ -177,12 +213,10 @@ class HyperFluxWindow(QMainWindow):
             self.service_error.emit(f"Could not start the local search bridge: {error}")
 
     def closeEvent(self, event):
+        # Stopping services on purpose must not show "stopped unexpectedly" popups.
+        self._shutting_down = True
         if self._search_server is not None:
             self._search_server.shutdown()
             self._search_server.server_close()
-        if self._kobold_process is not None:
-            self._kobold_process.terminate()
-            if not self._kobold_process.waitForFinished(3000):
-                self._kobold_process.kill()
-                self._kobold_process.waitForFinished(1000)
+        self._stop_kobold()
         super().closeEvent(event)

@@ -77,7 +77,7 @@ def fetch_model_name():
 
 def clean_response(text):
     """Strip turn markers and speaker labels the model sometimes echoes."""
-    text = text.replace("<end_of_turn>", "").strip()
+    text = text.replace("<end_of_turn>", "").replace("<turn|>", "").strip()
     return re.sub(
         r'^(?:Copilot|Assistant|HyperFlux|Qwen):\s*',
         '',
@@ -86,22 +86,39 @@ def clean_response(text):
     )
 
 
+# Gemma 4 native thoughts first, then older tag styles some models emit.
+_THOUGHT_BLOCKS = (
+    re.compile(r"<\|channel>(?:thought)?\s*([\s\S]*?)(<channel\|>|$)"),
+    re.compile(r"<think(?:ing)?\b[^>]*>([\s\S]*?)(</think(?:ing)?>|$)", re.IGNORECASE),
+    re.compile(r"<reasoning\b[^>]*>([\s\S]*?)(</reasoning\s*>|$)", re.IGNORECASE),
+)
+_STRAY_MARKERS = re.compile(
+    r"<\|channel>|<channel\|>|</?think(?:ing)?\b[^>]*>|</?reasoning\b[^>]*>",
+    re.IGNORECASE,
+)
+
+
+def split_thinking(text):
+    """Split model output into (thinking, answer, thinking_done).
+
+    thinking_done is False while a thought block is still open (mid-stream).
+    """
+    thoughts = []
+    thinking_done = True
+    for pattern in _THOUGHT_BLOCKS:
+        while True:
+            match = pattern.search(text)
+            if not match:
+                break
+            thoughts.append(match.group(1).strip())
+            if not match.group(2):
+                thinking_done = False
+            text = text[:match.start()] + text[match.end():]
+    answer = _STRAY_MARKERS.sub("", text).strip()
+    return "\n\n".join(t for t in thoughts if t), answer, thinking_done
+
+
 def split_reasoning_summary(text, allow_reasoning=True):
-    """Keep only the explicitly requested summary; discard native hidden thoughts."""
-    text = re.sub(
-        r"<think(?:ing)?\b[^>]*>[\s\S]*?(?:</think(?:ing)?>|$)",
-        "",
-        text,
-        flags=re.IGNORECASE,
-    )
-    reasoning = ""
-    match = re.search(
-        r"<reasoning\b[^>]*>([\s\S]*?)(?:</reasoning\s*>|$)",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if match:
-        reasoning = match.group(1).strip()
-        text = text[:match.start()] + text[match.end():]
-    text = re.sub(r"</?reasoning\b[^>]*>", "", text, flags=re.IGNORECASE).strip()
-    return (reasoning if allow_reasoning else ""), text
+    """Return (thinking, answer); thinking is dropped when allow_reasoning is False."""
+    thinking, answer, _ = split_thinking(text)
+    return (thinking if allow_reasoning else ""), answer

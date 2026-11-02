@@ -22,6 +22,7 @@ custom_theme = Theme({
 })
 
 console = Console(theme=custom_theme)
+THINKING_PREVIEW_LINES = 12
 
 
 class UI:
@@ -103,11 +104,17 @@ class UI:
         console.print(prompt)
 
     @staticmethod
-    def assistant_panel(text: str, status: str = ""):
+    def assistant_panel(text: str, status: str = "", thinking: str = ""):
+        """Assistant turn. `thinking` streams dimmed while the model thinks; once the
+        answer starts, callers drop it and pass a short "Thought for Ns" status."""
         heading = Text("✦ HyperFlux", style="bold white")
         content: list[RenderableType] = [heading]
         if status:
             content.append(Text(status, style="dim"))
+        if thinking:
+            # Show only the latest lines so the panel doesn't grow off-screen.
+            recent = "\n".join(thinking.splitlines()[-THINKING_PREVIEW_LINES:])
+            content.append(Text(recent, style="italic #94A3B8"))
         if text:
             content.append(Markdown(text, code_theme="monokai"))
         return Panel(

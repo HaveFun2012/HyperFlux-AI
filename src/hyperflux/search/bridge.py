@@ -3,23 +3,63 @@
 Run on its own with:  python -m hyperflux.search.bridge
 """
 
+import hmac
 import json
 import re
+import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import requests
 
-from hyperflux.paths import KOBOLD_LOG_PATH
+from hyperflux.paths import BRIDGE_TOKEN_PATH, KOBOLD_LOG_PATH
 
 _LOG_TAIL_BYTES = 64 * 1024
+# Blocks DNS-rebinding pages, which reach 127.0.0.1 under their own host name.
+_ALLOWED_HOSTS = re.compile(r"(?:localhost|127\.0\.0\.1)(?::\d+)?", re.IGNORECASE)
+
+
+def load_or_create_token(path=BRIDGE_TOKEN_PATH):
+    """Return the shared bridge token, creating it on first use.
+
+    Any website can send requests with `Origin: null` (sandboxed iframes), so the
+    origin check alone can't protect the logs. Only the desktop app reads this file.
+    """
+    path = Path(path)
+    try:
+        token = path.read_text(encoding="ascii").strip()
+        if token:
+            return token
+    except (OSError, UnicodeError):
+        pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    token = secrets.token_urlsafe(32)
+    try:
+        # "x" mode: if another process created it first, use theirs.
+        with path.open("x", encoding="ascii") as destination:
+            destination.write(token)
+    except FileExistsError:
+        return path.read_text(encoding="ascii").strip()
+    except OSError:
+        pass
+    return token
 
 
 class _SearchBridgeHandler(BaseHTTPRequestHandler):
     engine = None
     result_count = 3
     kobold_log_path = KOBOLD_LOG_PATH
+    log_token = ""
+
+    def _host_is_allowed(self):
+        return bool(_ALLOWED_HOSTS.fullmatch(self.headers.get("Host", "")))
+
+    def _log_token_is_valid(self):
+        query = parse_qs(urlsplit(self.path).query)
+        supplied = (query.get("token") or [""])[0]
+        return bool(self.log_token) and hmac.compare_digest(supplied, self.log_token)
 
     def _origin_is_allowed(self):
         origin = self.headers.get("Origin", "")
@@ -50,7 +90,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):
-        if not self._origin_is_allowed():
+        if not self._host_is_allowed() or not self._origin_is_allowed():
             self._send_json(403, {"error": "Origin not allowed."})
             return
         self.send_response(204)
@@ -58,14 +98,21 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path == "/health":
+        if not self._host_is_allowed():
+            self._send_json(403, {"error": "Host not allowed."})
+            return
+        route = urlsplit(self.path).path
+        if route == "/health":
             self._send_json(200, {"status": "ok", "service": "HyperFlux search"})
             return
-        if self.path != "/kobold-logs":
+        if route != "/kobold-logs":
             self._send_json(404, {"error": "Not found."})
             return
         if not self._origin_is_allowed():
             self._send_json(403, {"error": "Origin not allowed."})
+            return
+        if not self._log_token_is_valid():
+            self._send_json(403, {"error": "Live logs are only available in the HyperFlux desktop app."})
             return
 
         log_path = Path(self.kobold_log_path)
@@ -88,6 +135,9 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         self._send_json(200, {"available": True, "text": text})
 
     def do_POST(self):
+        if not self._host_is_allowed():
+            self._send_json(403, {"error": "Host not allowed."})
+            return
         if self.path != "/search":
             self._send_json(404, {"error": "Not found."})
             return
@@ -126,11 +176,15 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         return
 
 
-def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3):
+def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, log_token=None):
     handler = type(
         "HyperFluxSearchBridgeHandler",
         (_SearchBridgeHandler,),
-        {"engine": engine, "result_count": result_count},
+        {
+            "engine": engine,
+            "result_count": result_count,
+            "log_token": load_or_create_token() if log_token is None else log_token,
+        },
     )
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True

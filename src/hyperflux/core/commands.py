@@ -13,6 +13,13 @@ def handle_runtime_command(engine, user_input: str, quiet=False, token_callback=
     lowered = user_input.casefold()
     if lowered == "/sys":
         return _system_status(engine)
+    think_match = re.fullmatch(r"/think(?:\s+(\S+))?", user_input.strip(), re.IGNORECASE)
+    if think_match:
+        return _set_thinking(engine, (think_match.group(1) or "").casefold())
+    if lowered == "/thinking":
+        if not engine.last_reasoning:
+            return "The last answer had no thinking to show."
+        return f"### Thinking for the last answer\n\n{engine.last_reasoning}"
 
     temperature_match = re.fullmatch(r"/temp(?:\s+(.*))?", user_input, re.IGNORECASE)
     if temperature_match:
@@ -51,6 +58,18 @@ def _system_status(engine):
         "Context and speed are estimates based on text length; KoboldCPP "
         "does not provide exact token/cache metrics through this client."
     )
+
+
+def _set_thinking(engine, value):
+    if value in {"on", "off"}:
+        engine.thinking_enabled = value == "on"
+    elif value:
+        return "Usage: /think on|off"
+    else:
+        engine.thinking_enabled = not engine.thinking_enabled
+    if engine.thinking_enabled:
+        return "Thinking is **on**: better answers to hard questions, but slower."
+    return "Thinking is **off**: faster, direct answers."
 
 
 def _set_temperature(engine, value):

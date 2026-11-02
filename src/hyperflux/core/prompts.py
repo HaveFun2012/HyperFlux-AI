@@ -27,19 +27,54 @@ def is_thinking_exempt(user_input):
     )
 
 
-def build_thinking_instruction(user_input):
-    if is_thinking_exempt(user_input):
-        return (
-            "For this greeting or direct name question, answer naturally and "
-            "briefly without a reasoning summary."
-        )
-    return (
-        "Thinking mode is enabled. Before the answer, emit a short, "
-        "user-facing reasoning summary in <reasoning>...</reasoning> tags. "
-        "Keep it to 1-3 concise sentences describing the approach or key "
-        "checks, not private chain-of-thought, hidden scratch work, or "
-        "token-by-token thoughts. Then give the answer outside those tags."
+# Gemma 4 thinks natively when <|think|> opens the system turn. Its thoughts come
+# back as <|channel>thought ... <channel|>, followed by the answer.
+THINKING_GUIDANCE = (
+    "Think before you answer, and scale the depth of your thinking to the problem. "
+    "A simple question needs only a quick check. For complex, multi-step, ambiguous, "
+    "or high-stakes questions, think it through fully: restate the real goal, consider "
+    "other readings of the question, work step by step, check every calculation and "
+    "edge case, question your first idea, and verify the conclusion before answering. "
+    "Do not cut your thinking short to save space.\n"
+    "The user sees your thinking collapsed above the answer, so the answer must stand "
+    "on its own: lead with the result, then explain the key steps clearly. Do not "
+    "repeat your whole thinking in the answer."
+)
+NO_THINKING_GUIDANCE = "Answer directly, without a separate thinking section."
+
+
+def wants_thinking(user_input, thinking_enabled=True):
+    """Think unless the user turned it off or the message is just a greeting."""
+    return thinking_enabled and not is_thinking_exempt(user_input)
+
+
+def build_thinking_instruction(user_input, thinking_enabled=True):
+    if wants_thinking(user_input, thinking_enabled):
+        return THINKING_GUIDANCE
+    return NO_THINKING_GUIDANCE
+
+
+def build_gemma4_prompt(system_instruction, history, user_prompt, thinking, budget_chars):
+    """Gemma 4 chat format, keeping as much recent history as fits in budget_chars.
+
+    history: list of (user_text, model_text) pairs, oldest first, without thoughts
+    (Gemma 4's own template strips thoughts from earlier turns too).
+    """
+    system_turn = (
+        "<|turn>system\n"
+        + ("<|think|>\n" if thinking else "")
+        + f"{system_instruction}<turn|>\n"
     )
+    current_turn = f"<|turn>user\n{user_prompt}<turn|>\n<|turn>model\n"
+    remaining = max(0, budget_chars - len(system_turn) - len(current_turn))
+    kept = []
+    for user_text, model_text in reversed(history):
+        turn = f"<|turn>user\n{user_text}<turn|>\n<|turn>model\n{model_text}<turn|>\n"
+        if len(turn) > remaining:
+            break
+        kept.append(turn)
+        remaining -= len(turn)
+    return system_turn + "".join(reversed(kept)) + current_turn
 
 
 def build_capabilities(model_name):
@@ -122,7 +157,7 @@ Rules:
 - Be a capable, friendly, conversational assistant. Be warm and natural without sounding scripted, overly formal, or excessively enthusiastic.
 - Respond to the user's intent and the full conversation context. For greetings, greet them naturally and let them lead; do not use a fixed script, give a capability list, or mention the model unless asked.
 - For simple questions, answer directly and briefly. For complex requests, explain the useful details and organize them clearly.
-- For complex or high-stakes questions, reason carefully before answering: identify the goal, break the problem into steps, check assumptions and calculations, compare relevant alternatives, and verify the conclusion. Present the result and a concise explanation, not private chain-of-thought or hidden scratch work.
+- For complex or high-stakes questions, reason carefully before answering: identify the goal, break the problem into steps, check assumptions and calculations, compare relevant alternatives, and verify the conclusion. In the answer, present the result and a clear explanation of the key steps.
 - Avoid one-word or dismissive replies when a brief, helpful response would be more appropriate.
 - When the user corrects or criticizes an answer, acknowledge the issue briefly, then address what they meant; do not defend or merely narrate the previous response.
 - Do not repeat the user's request, add unnecessary preambles, or volunteer a capability summary.
