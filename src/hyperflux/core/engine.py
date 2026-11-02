@@ -14,6 +14,7 @@ from rich.text import Text
 from hyperflux.config import Config
 from hyperflux.core import kobold, routing
 from hyperflux.core.commands import handle_runtime_command
+from hyperflux.core.formatting import repair_collapsed_tables
 from hyperflux.core.math_solver import SafeMathSolver
 from hyperflux.core.prompts import (
     MATH_INSTRUCTIONS,
@@ -181,7 +182,9 @@ class HyperFluxEngine:
                         )
                     else:
                         live.update(
-                            UI.assistant_panel(answer, _thought_label(thought_seconds)),
+                            UI.assistant_panel(
+                                repair_collapsed_tables(answer), _thought_label(thought_seconds)
+                            ),
                             refresh=True,
                         )
 
@@ -196,7 +199,7 @@ class HyperFluxEngine:
                     response_text,
                     thinking_enabled,
                 )
-                response_text = kobold.clean_response(response_text)
+                response_text = repair_collapsed_tables(kobold.clean_response(response_text))
                 elapsed = time.perf_counter() - generation_started
                 if reasoning and thought_seconds is None:
                     thought_seconds = elapsed

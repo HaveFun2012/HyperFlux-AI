@@ -255,6 +255,13 @@ body{font-family:var(--font);font-size:14px;line-height:1.6;color:var(--t1);back
 .a-content li{padding-left:4px;margin:3px 0}
 .a-content blockquote{margin:10px 0;padding:8px 14px;border-left:3px solid var(--ac);color:var(--t2);background:rgba(255,255,255,.035);border-radius:0 10px 10px 0}
 .a-content a{color:var(--ac3);text-decoration:underline;text-underline-offset:3px}
+.a-content .table-wrap{margin:12px 0 16px;overflow-x:auto;border:1px solid var(--gb2);border-radius:12px}
+.a-content table{width:100%;border-collapse:collapse;font-size:.94em;line-height:1.5}
+.a-content th,.a-content td{padding:9px 13px;text-align:left;vertical-align:top;border-bottom:1px solid var(--gb2)}
+.a-content th{background:var(--acbg);color:var(--t1);font-weight:650;white-space:nowrap}
+.a-content tbody tr:nth-child(even) td{background:rgba(255,255,255,.03)}
+.a-content tbody tr:last-child td{border-bottom:0}
+.a-content th+th,.a-content td+td{border-left:1px solid var(--gb2)}
 .a-content code{font-family:var(--mono);font-size:.9em;background:rgba(0,0,0,.25);border:1px solid var(--gb2);padding:2px 6px;border-radius:6px}
 .a-content pre{margin:12px 0 16px;padding:14px 16px;overflow:auto;border:1px solid var(--gb2);border-radius:12px;background:rgba(0,0,0,.32);white-space:pre}
 .a-content pre code{display:block;padding:0;border:0;background:none;border-radius:0;white-space:pre}
@@ -1031,6 +1038,7 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt) {
     "The terminal and web interfaces have separate conversation histories. Never claim to remember messages from the other interface unless they are included here.",
     "Be a thoughtful, capable, conversational assistant: friendly, clear, grounded, and natural without sounding scripted or overly enthusiastic.",
     "Lead with the direct answer, then add the most useful explanation. Match the user's requested level of detail; use headings, lists, examples, and code blocks when they improve clarity, not by default.",
+    "Formatting: write in clear prose by default. Use a Markdown table only to compare several items across the same attributes. In a table, put the header row, the divider row (| :--- | :--- |), and every data row each on its own line, with the same number of cells in every row; never put two rows on one line. Keep cells short. Use bullet lists for steps or options, **bold** sparingly for key terms, and a short heading only for long, multi-part answers.",
     "For complex tasks, break the response into practical steps. For coding questions, provide correct, usable code and explain important choices briefly. Ask a concise clarifying question only when needed; otherwise make a reasonable assumption and say so when it matters.",
     "For complex or high-stakes questions, reason carefully before answering: identify the goal, break the problem into steps, check assumptions and calculations, compare relevant alternatives, and verify the conclusion. In the answer, present the result and a clear explanation of the key steps.",
     "Be honest about uncertainty and limitations. Do not invent capabilities, dates, sources, or current facts. Avoid repetitive preambles and unnecessary restatements of the user's request.",
@@ -1248,8 +1256,76 @@ function renderInlineMarkdown(text) {
   });
 }
 
+// ---- Markdown tables ------------------------------------------------------
+var TABLE_SEPARATOR_CELL = /^:?-{3,}:?$/;
+
+function splitTableRow(line) {
+  // "\|" is a literal pipe inside a cell.
+  var inner = line.trim().replace(/^\|/, '').replace(/\|$/, '').replace(/\\\|/g, '\u0001');
+  return inner.split('|').map(function(cell) { return cell.trim().replace(/\u0001/g, '|'); });
+}
+
+function isTableRow(line) {
+  return /^\|.*\|$/.test(line) && line.length >= 3;
+}
+
+function isTableSeparator(line) {
+  var cells = splitTableRow(line);
+  return cells.length > 0 && cells.every(function(cell) { return TABLE_SEPARATOR_CELL.test(cell); });
+}
+
+// Small models sometimes write a whole table on one line:
+//   | A | B | | :--- | :--- | | x | y |
+// The run of ":---" cells gives the column count, so the rows can be rebuilt.
+function repairCollapsedTables(text) {
+  return text.split('\n').map(function(line) {
+    var trimmed = line.trim();
+    if (!isTableRow(trimmed) || !/\|\s*\|/.test(trimmed)) return line;
+    var cells = splitTableRow(trimmed);
+    var columns = 0, run = 0;
+    cells.forEach(function(cell) {
+      run = TABLE_SEPARATOR_CELL.test(cell) ? run + 1 : 0;
+      columns = Math.max(columns, run);
+    });
+    // Rows of `columns` cells, each followed by one empty cell from the "| |" join.
+    if (columns < 2 || (cells.length + 1) % (columns + 1) !== 0) return line;
+    var rows = [];
+    for (var i = 0; i < cells.length; i += columns + 1) {
+      if (i + columns < cells.length && cells[i + columns] !== '') return line;
+      rows.push('| ' + cells.slice(i, i + columns).join(' | ') + ' |');
+    }
+    return rows.length >= 2 && isTableSeparator(rows[1]) ? rows.join('\n') : line;
+  }).join('\n');
+}
+
+function renderTable(rows) {
+  var header = splitTableRow(rows[0]);
+  var aligns = splitTableRow(rows[1]).map(function(cell) {
+    if (/^:-+:$/.test(cell)) return 'center';
+    if (/-+:$/.test(cell)) return 'right';
+    return '';
+  });
+  var columns = header.length;
+  function cellHtml(tag, text, index) {
+    var align = aligns[index] ? ' style="text-align:' + aligns[index] + '"' : '';
+    return '<' + tag + align + '>' + renderInlineMarkdown(text || '') + '</' + tag + '>';
+  }
+  var out = ['<div class="table-wrap"><table><thead><tr>'];
+  header.forEach(function(cell, index) { out.push(cellHtml('th', cell, index)); });
+  out.push('</tr></thead><tbody>');
+  rows.slice(2).forEach(function(row) {
+    var cells = splitTableRow(row);
+    out.push('<tr>');
+    for (var index = 0; index < columns; index++) out.push(cellHtml('td', cells[index], index));
+    out.push('</tr>');
+  });
+  out.push('</tbody></table></div>');
+  return out.join('');
+}
+
 function renderMarkdown(text) {
-  var lines = String(text).replace(/\r\n?/g, '\n').split('\n');
+  var lines = repairCollapsedTables(String(text).replace(/\r\n?/g, '\n')).split('\n');
+  var tableLines = [];
   var html = [];
   var paragraph = [];
   var listType = null;
@@ -1274,8 +1350,20 @@ function renderMarkdown(text) {
       inQuote = false;
     }
   }
+  function flushTable() {
+    if (!tableLines.length) return;
+    if (tableLines.length >= 2 && isTableSeparator(tableLines[1])) {
+      html.push(renderTable(tableLines));
+    } else {
+      // Not a real table (no divider row): show the lines as text.
+      paragraph = paragraph.concat(tableLines);
+      flushParagraph();
+    }
+    tableLines = [];
+  }
 
   lines.forEach(function(line) {
+    if (!codeLines && !isTableRow(line.trim())) flushTable();
     var fenceMatch = line.match(/^\s*```/);
     if (fenceMatch) {
       flushParagraph();
@@ -1295,6 +1383,13 @@ function renderMarkdown(text) {
     }
 
     var trimmed = line.trim();
+    if (isTableRow(trimmed)) {
+      flushParagraph();
+      closeList();
+      closeQuote();
+      tableLines.push(trimmed);
+      return;
+    }
     if (!trimmed) {
       flushParagraph();
       closeList();
@@ -1351,6 +1446,7 @@ function renderMarkdown(text) {
   });
 
   if (codeLines) html.push('<pre><code>' + escapeHtml(codeLines.join('\n')) + '</code></pre>');
+  flushTable();
   flushParagraph();
   closeList();
   closeQuote();
@@ -1419,7 +1515,8 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
   }
   var answer = mk('div', 'assistant-answer');
   if (streaming) {
-    answer.textContent = text || (reasoning ? '' : 'Thinking…');
+    if (text) answer.innerHTML = renderMarkdown(text);
+    else answer.textContent = reasoning ? '' : 'Thinking…';
   } else {
     answer.innerHTML = renderMarkdown(text);
   }
