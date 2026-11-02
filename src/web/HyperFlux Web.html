@@ -25,12 +25,16 @@
   --font:'Plus Jakarta Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace;
   --r3:12px;--r6:24px;--r7:30px;--rp:999px;
   --sp:cubic-bezier(.34,1.56,.64,1);--ease:cubic-bezier(.16,1,.3,1);--sbw:260px;
+  /* Surfaces that must flip between dark and light themes */
+  --soft:rgba(255,255,255,.035);--code-bg:rgba(0,0,0,.32);--code-inline-bg:rgba(0,0,0,.25);
+  --card-shadow:0 10px 30px rgba(0,0,0,.4);--logs-bg:rgba(0,0,0,.28);
+  --inp-bg:rgba(15,23,42,.16);--inp-bg-focus:rgba(15,23,42,.2);--inp-border:rgba(255,255,255,.14);
 }
 
 body.theme-obsidian {
   --bg:#000000;--g1:rgba(8,8,10,.82);--g2:rgba(18,18,22,.86);--g3:rgba(15,15,19,.96);--g4:#292930;
-  --ac:#38bdf8;--ac2:#0369a1;--ac3:#bae6fd;--acbg:rgba(56,189,248,.14);--acbr:rgba(186,230,253,.4);
-  --grad:linear-gradient(135deg,#075985,#0284c7,#38bdf8);--particle-rgb:56,189,248;
+  --ac:#a1a1aa;--ac2:#52525b;--ac3:#e4e4e7;--acbg:rgba(161,161,170,.14);--acbr:rgba(212,212,216,.36);
+  --grad:linear-gradient(135deg,#27272a,#52525b,#a1a1aa);--particle-rgb:161,161,170;
 }
 body.theme-cyberpunk {
   --bg:#090014;--g1:rgba(24,4,48,.78);--g2:rgba(40,10,75,.84);--g3:rgba(30,8,52,.96);--g4:#451768;
@@ -62,11 +66,17 @@ body.theme-amber-light {
   --gs:rgba(15,23,42,.035);--gb:rgba(15,23,42,.08);--gb2:rgba(15,23,42,.15);
   --t1:#080b12;--t2:#303746;--t3:#626d7d;
   --sdw:0 8px 32px rgba(15,23,42,.12);
+  --soft:rgba(15,23,42,.03);--code-bg:rgba(15,23,42,.045);--code-inline-bg:rgba(15,23,42,.06);
+  --card-shadow:0 8px 24px rgba(15,23,42,.08);--logs-bg:rgba(15,23,42,.04);
+  --inp-bg:rgba(255,255,255,.72);--inp-bg-focus:rgba(255,255,255,.9);--inp-border:rgba(15,23,42,.14);
 }
-body.theme-light,
-body.theme-obsidian-light {
+body.theme-light {
   --ac:#0284c7;--ac2:#075985;--ac3:#0369a1;--acbg:rgba(2,132,199,.1);--acbr:rgba(2,132,199,.32);
   --grad:linear-gradient(135deg,#075985,#0284c7,#38bdf8);--particle-rgb:2,132,199;
+}
+body.theme-obsidian-light {
+  --ac:#3f3f46;--ac2:#18181b;--ac3:#27272a;--acbg:rgba(63,63,70,.08);--acbr:rgba(63,63,70,.3);
+  --grad:linear-gradient(135deg,#18181b,#3f3f46,#71717a);--particle-rgb:82,82,91;
 }
 body.theme-cyberpunk-light {
   --ac:#db2777;--ac2:#9d174d;--ac3:#9d174d;--acbg:rgba(219,39,119,.1);--acbr:rgba(219,39,119,.32);
@@ -235,10 +245,10 @@ body{font-family:var(--font);font-size:14px;line-height:1.6;color:var(--t1);back
 .a-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .a-name{font-size:13px;font-weight:700;color:var(--t1)}
 .a-badge{font-family:var(--mono);font-size:8px;padding:2px 8px;border-radius:var(--rp);background:var(--acbg);color:var(--ac3);border:1px solid var(--acbr);}
-.a-card{padding:18px;border-radius:4px 20px 20px 20px;background:var(--g2);border:1px solid var(--gb2);box-shadow:0 10px 30px rgba(0,0,0,.4);}
+.a-card{padding:18px;border-radius:4px 20px 20px 20px;background:var(--g2);border:1px solid var(--gb2);box-shadow:var(--card-shadow);}
 .a-content{font-size:calc(15px * var(--ui-scale,1));line-height:1.8;color:var(--t1);word-break:break-word;}
 .a-content.streaming{white-space:pre-wrap}
-.reasoning-details{margin:0 0 14px;padding:10px 12px;border:1px solid var(--gb2);border-radius:12px;background:rgba(255,255,255,.035);color:var(--t2);font-size:.88em;line-height:1.65}
+.reasoning-details{margin:0 0 14px;padding:10px 12px;border:1px solid var(--gb2);border-radius:12px;background:var(--soft);color:var(--t2);font-size:.88em;line-height:1.65}
 .reasoning-details summary{cursor:pointer;list-style:none;color:var(--ac3);font-size:.9em;font-weight:650;user-select:none}
 .reasoning-details summary::-webkit-details-marker{display:none}
 .reasoning-details summary::before{content:"▸";display:inline-block;margin-right:8px;transition:transform .18s ease}
@@ -255,18 +265,18 @@ body{font-family:var(--font);font-size:14px;line-height:1.6;color:var(--t1);back
 .a-content h1{font-size:1.45em}.a-content h2{font-size:1.3em}.a-content h3,.a-content h4{font-size:1.12em}
 .a-content ul,.a-content ol{margin:8px 0 14px;padding-left:24px}
 .a-content li{padding-left:4px;margin:3px 0}
-.a-content blockquote{margin:10px 0;padding:8px 14px;border-left:3px solid var(--ac);color:var(--t2);background:rgba(255,255,255,.035);border-radius:0 10px 10px 0}
+.a-content blockquote{margin:10px 0;padding:8px 14px;border-left:3px solid var(--ac);color:var(--t2);background:var(--soft);border-radius:0 10px 10px 0}
 .a-content a{color:var(--ac3);text-decoration:underline;text-underline-offset:3px}
 .a-content .table-wrap{margin:12px 0 16px;overflow-x:auto;border:1px solid var(--gb2);border-radius:12px}
 .a-content table{width:100%;border-collapse:collapse;font-size:.94em;line-height:1.5}
 .a-content th,.a-content td{padding:9px 13px;text-align:left;vertical-align:top;border-bottom:1px solid var(--gb2)}
 .a-content th{background:var(--acbg);color:var(--t1);font-weight:650;white-space:nowrap}
-.a-content tbody tr:nth-child(even) td{background:rgba(255,255,255,.03)}
+.a-content tbody tr:nth-child(even) td{background:var(--soft)}
 .a-content tbody tr:last-child td{border-bottom:0}
 .a-content th+th,.a-content td+td{border-left:1px solid var(--gb2)}
 .a-content .katex-display{margin:10px 0;overflow-x:auto;overflow-y:hidden;padding:4px 0}
 .a-content .katex{font-size:1.12em}
-.a-content .code-block{margin:12px 0 16px;border:1px solid var(--gb2);border-radius:12px;overflow:hidden;background:rgba(0,0,0,.32)}
+.a-content .code-block{margin:12px 0 16px;border:1px solid var(--gb2);border-radius:12px;overflow:hidden;background:var(--code-bg)}
 .a-content .code-head{display:flex;align-items:center;justify-content:space-between;padding:6px 10px 6px 14px;border-bottom:1px solid var(--gb2);font:11px var(--mono);color:var(--t3);text-transform:lowercase}
 .a-content .code-block pre{margin:0;border:0;border-radius:0;background:none}
 .code-copy,.act-btn{height:26px;padding:0 10px;border-radius:8px;border:1px solid var(--gb2);background:var(--gs);color:var(--t2);font:600 11px var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
@@ -283,16 +293,16 @@ body.hf-generating .msg-actions{display:none}
 .jump-btn{position:absolute;top:-46px;left:50%;transform:translateX(-50%);height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--acbr);background:var(--g2);color:var(--ac3);font:600 12px var(--font);cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35);z-index:5}
 .send-btn.is-stop{background:var(--g2);border:1.5px solid var(--acbr)}
 .stop-square{width:12px;height:12px;border-radius:3px;background:var(--ac3);display:block}
-.a-content code{font-family:var(--mono);font-size:.9em;background:rgba(0,0,0,.25);border:1px solid var(--gb2);padding:2px 6px;border-radius:6px}
-.a-content pre{margin:12px 0 16px;padding:14px 16px;overflow:auto;border:1px solid var(--gb2);border-radius:12px;background:rgba(0,0,0,.32);white-space:pre}
+.a-content code{font-family:var(--mono);font-size:.9em;background:var(--code-inline-bg);border:1px solid var(--gb2);padding:2px 6px;border-radius:6px}
+.a-content pre{margin:12px 0 16px;padding:14px 16px;overflow:auto;border:1px solid var(--gb2);border-radius:12px;background:var(--code-bg);white-space:pre}
 .a-content pre code{display:block;padding:0;border:0;background:none;border-radius:0;white-space:pre}
 .a-content hr{border:0;border-top:1px solid var(--gb2);margin:14px 0}
 
 /* Input Dock Area */
 .inp-area{padding:12px 20px 20px;border:0;flex-shrink:0;background:transparent;display:flex;justify-content:center}
-.inp-box{display:flex;flex-direction:column;gap:10px;width:min(100%,900px);padding:12px 14px 12px 20px;background:rgba(15,23,42,.16);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1.5px solid rgba(255,255,255,.14);border-radius:var(--r6);box-shadow:0 8px 25px rgba(0,0,0,.12);transition:border-color .2s,box-shadow .2s}
+.inp-box{display:flex;flex-direction:column;gap:10px;width:min(100%,900px);padding:12px 14px 12px 20px;background:var(--inp-bg);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1.5px solid var(--inp-border);border-radius:var(--r6);box-shadow:0 8px 25px rgba(0,0,0,.12);transition:border-color .2s,box-shadow .2s}
 .chat-attachment{align-self:flex-start}
-.inp-box:focus-within{background:rgba(15,23,42,.2);border-color:var(--acbr);box-shadow:0 0 0 3px var(--acbg),0 12px 36px rgba(0,0,0,.2)}
+.inp-box:focus-within{background:var(--inp-bg-focus);border-color:var(--acbr);box-shadow:0 0 0 3px var(--acbg),0 12px 36px rgba(0,0,0,.2)}
 .inp-area.is-generating .inp-box{border-color:var(--acbr)}
 .inp-ta{width:100%;min-height:22px;max-height:6.4em;overflow-y:hidden;background:none;border:none;outline:none;resize:none;color:var(--t1);font-family:var(--font);font-size:calc(15px * var(--ui-scale,1));line-height:1.6}
 .inp-ta::placeholder{color:var(--t3)}
@@ -316,18 +326,32 @@ body.hf-generating .msg-actions{display:none}
 .logs-modal-head h3{margin:0 0 8px}
 .logs-close{width:34px;height:34px;border:1px solid var(--gb2);border-radius:10px;background:var(--gs);color:var(--t2);cursor:pointer}
 .logs-close:hover{color:var(--t1);border-color:var(--acbr)}
-.logs-output{height:min(58vh,560px);min-height:220px;overflow:auto;margin-top:12px;padding:14px;border:1px solid var(--gb2);border-radius:12px;background:rgba(0,0,0,.28);color:var(--t2);font:11px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.logs-output{height:min(58vh,560px);min-height:220px;overflow:auto;margin-top:12px;padding:14px;border:1px solid var(--gb2);border-radius:12px;background:var(--logs-bg);color:var(--t2);font:11px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
 .logs-foot{margin-top:9px;color:var(--t3);font:10px var(--mono)}
 .setting-row{display:flex;flex-direction:column;gap:6px;margin:14px 0}
 .setting-row label{font-size:12px;font-weight:600;color:var(--t2)}
 .setting-row input,.setting-row select{width:100%;padding:10px 12px;border-radius:var(--r3);border:1px solid var(--gb2);background:var(--g1);color:var(--t1);font:14px var(--mono);outline:none}
 .setting-row input:focus,.setting-row select:focus{border-color:var(--acbr);box-shadow:0 0 0 3px var(--acbg)}
 .setting-row input[type="color"]{height:42px;padding:4px;cursor:pointer}
+.setting-row input[type="color"]:disabled{opacity:.4;cursor:not-allowed}
+.setting-row .check-row{display:flex;align-items:center;gap:8px;cursor:pointer}
+.setting-row .check-row input{width:auto;padding:0;accent-color:var(--ac)}
+.setting-hint{font-size:11px;color:var(--t3)}
 .setting-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
 .setting-actions button{padding:9px 14px;border-radius:var(--r3);border:1px solid var(--gb2);background:var(--gs);color:var(--t1);font:600 12px var(--font);cursor:pointer}
 .setting-actions .save-settings{background:var(--grad);border:0}
 .theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.theme-opt{padding:14px;border-radius:var(--r3);background:var(--g1);border:1px solid var(--gb2);cursor:pointer;text-align:center;font:600 12px var(--font);color:var(--t1);transition:.2s}
+.theme-opt{padding:12px;border-radius:var(--r3);background:var(--g1);border:1px solid var(--gb2);cursor:pointer;text-align:left;font:600 13px var(--font);color:var(--t1);transition:.2s;display:grid;grid-template-columns:28px 1fr;column-gap:10px;align-items:center}
+.theme-swatch{grid-row:span 2;width:28px;height:28px;border-radius:9px;border:1px solid var(--gb2)}
+.theme-name{line-height:1.2}
+.theme-desc{font-size:11px;font-weight:500;color:var(--t3);line-height:1.3}
+.theme-section-label{font:600 11px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin:16px 0 8px}
+.mode-switch{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:var(--r3);background:var(--g1);border:1px solid var(--gb2)}
+.mode-opt{padding:8px 6px;border:0;border-radius:9px;background:none;color:var(--t2);font:600 12px var(--font);cursor:pointer}
+.mode-opt[aria-pressed="true"]{background:var(--acbg);color:var(--t1);box-shadow:inset 0 0 0 1px var(--acbr)}
+.mode-opt:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.theme-note{margin-top:14px;font-size:12px;color:var(--t2);line-height:1.5}
+.theme-note-btn{margin-left:4px;background:none;border:0;color:var(--ac3);font:600 12px var(--font);text-decoration:underline;cursor:pointer;padding:0}
 .theme-opt:hover,.theme-opt.selected{border-color:var(--ac);background:var(--acbg);transform:translateY(-2px)}
 .theme-opt:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 @media(max-width:760px){
@@ -451,22 +475,27 @@ body.hf-generating .msg-actions{display:none}
 
 <!-- Theme Modal -->
 <div class="ovl" id="themeOvl" onclick="if(event.target===this)HF.closeThemes()">
-  <div class="modal">
-    <h3>Choose Your Aesthetic</h3>
-    <div class="theme-grid">
-      <button class="theme-opt" data-theme="theme-default" onclick="HF.setTheme('theme-default')">Arch Cyan · Dark</button>
-      <button class="theme-opt" data-theme="theme-light" onclick="HF.setTheme('theme-light')">Arch Cyan · Light</button>
-      <button class="theme-opt" data-theme="theme-obsidian" onclick="HF.setTheme('theme-obsidian')">Obsidian · Dark</button>
-      <button class="theme-opt" data-theme="theme-obsidian-light" onclick="HF.setTheme('theme-obsidian-light')">Obsidian · Light</button>
-      <button class="theme-opt" data-theme="theme-cyberpunk" onclick="HF.setTheme('theme-cyberpunk')">Cyberpunk · Dark</button>
-      <button class="theme-opt" data-theme="theme-cyberpunk-light" onclick="HF.setTheme('theme-cyberpunk-light')">Cyberpunk · Light</button>
-      <button class="theme-opt" data-theme="theme-emerald" onclick="HF.setTheme('theme-emerald')">Emerald · Dark</button>
-      <button class="theme-opt" data-theme="theme-emerald-light" onclick="HF.setTheme('theme-emerald-light')">Emerald · Light</button>
-      <button class="theme-opt" data-theme="theme-violet" onclick="HF.setTheme('theme-violet')">Violet · Dark</button>
-      <button class="theme-opt" data-theme="theme-violet-light" onclick="HF.setTheme('theme-violet-light')">Violet · Light</button>
-      <button class="theme-opt" data-theme="theme-amber" onclick="HF.setTheme('theme-amber')">Amber · Dark</button>
-      <button class="theme-opt" data-theme="theme-amber-light" onclick="HF.setTheme('theme-amber-light')">Amber · Light</button>
+  <div class="modal" role="dialog" aria-labelledby="themeTitle">
+    <h3 id="themeTitle">Themes</h3>
+    <p class="modal-sub">Changes apply right away and are saved on this device.</p>
+    <div class="theme-section-label">Mode</div>
+    <div class="mode-switch" role="group" aria-label="Mode">
+      <button class="mode-opt" type="button" data-mode="dark" aria-pressed="false" onclick="HF.setThemeMode('dark')">Dark</button>
+      <button class="mode-opt" type="button" data-mode="light" aria-pressed="false" onclick="HF.setThemeMode('light')">Light</button>
+      <button class="mode-opt" type="button" data-mode="system" aria-pressed="false" onclick="HF.setThemeMode('system')">Match system</button>
     </div>
+    <div class="theme-section-label">Colour</div>
+    <div class="theme-grid">
+      <button class="theme-opt" type="button" data-family="arch" aria-pressed="false" onclick="HF.setThemeFamily('arch')"><span class="theme-swatch" style="background:linear-gradient(135deg,#0077b6,#00b4d8)" aria-hidden="true"></span><span class="theme-name">Arch Cyan</span><span class="theme-desc">Cool ocean blue</span></button>
+      <button class="theme-opt" type="button" data-family="obsidian" aria-pressed="false" onclick="HF.setThemeFamily('obsidian')"><span class="theme-swatch" style="background:linear-gradient(135deg,#27272a,#a1a1aa)" aria-hidden="true"></span><span class="theme-name">Obsidian</span><span class="theme-desc">Neutral graphite</span></button>
+      <button class="theme-opt" type="button" data-family="cyberpunk" aria-pressed="false" onclick="HF.setThemeFamily('cyberpunk')"><span class="theme-swatch" style="background:linear-gradient(135deg,#7209b7,#f72585)" aria-hidden="true"></span><span class="theme-name">Cyberpunk</span><span class="theme-desc">Neon pink and purple</span></button>
+      <button class="theme-opt" type="button" data-family="emerald" aria-pressed="false" onclick="HF.setThemeFamily('emerald')"><span class="theme-swatch" style="background:linear-gradient(135deg,#047857,#10b981)" aria-hidden="true"></span><span class="theme-name">Emerald</span><span class="theme-desc">Calm green</span></button>
+      <button class="theme-opt" type="button" data-family="violet" aria-pressed="false" onclick="HF.setThemeFamily('violet')"><span class="theme-swatch" style="background:linear-gradient(135deg,#6d28d9,#a78bfa)" aria-hidden="true"></span><span class="theme-name">Violet</span><span class="theme-desc">Soft lavender</span></button>
+      <button class="theme-opt" type="button" data-family="amber" aria-pressed="false" onclick="HF.setThemeFamily('amber')"><span class="theme-swatch" style="background:linear-gradient(135deg,#b45309,#f59e0b)" aria-hidden="true"></span><span class="theme-name">Amber</span><span class="theme-desc">Warm gold</span></button>
+    </div>
+    <p class="theme-note" id="themeAccentNote" hidden>A custom accent colour is set in Settings, so it replaces each theme's colour.
+      <button class="theme-note-btn" type="button" onclick="HF.clearAccent()">Use theme colours</button></p>
+    <div class="setting-actions"><button class="save-settings" type="button" onclick="HF.closeThemes()">Done</button></div>
   </div>
 </div>
 
@@ -492,8 +521,9 @@ body.hf-generating .msg-actions{display:none}
       <input id="displayNameSetting" type="text" maxlength="32" placeholder="There">
     </div>
     <div class="setting-row">
-      <label for="accentSetting">Accent color</label>
-      <input id="accentSetting" type="color" value="#00b4d8">
+      <label class="check-row"><input id="accentCustomSetting" type="checkbox" onchange="document.getElementById('accentSetting').disabled = !this.checked"> Use a custom accent colour</label>
+      <input id="accentSetting" type="color" value="#00b4d8" aria-label="Custom accent colour">
+      <span class="setting-hint">When off, each theme uses its own colours.</span>
     </div>
     <div class="setting-row">
       <label for="textSizeSetting">Chat text size</label>
@@ -608,8 +638,7 @@ resumeCanvasAnimation();
 
 /* Startup & Session Persistence */
 document.addEventListener('DOMContentLoaded', function() {
-  var savedTheme = localStorage.getItem('hfx_theme') || 'theme-default';
-  applyTheme(savedTheme);
+  applyThemeChoice();
   applyPersonalization();
   refreshSettingsForm();
   refreshPersonalizationForm();
@@ -776,6 +805,12 @@ var serverLogRequest = null;
 var lastContextTokens = null;
 var lastGenerationTps = null;
 var pendingAttachment = null;
+// Thinking needs room: prompt + history + thoughts + answer share the context window.
+// Defined before loadModelSettings() runs below (it reads them immediately).
+var MAX_OUTPUT_TOKENS = 6144;
+var MIN_CONTEXT_TOKENS = 1024;
+var MAX_CONTEXT_TOKENS = 16384;
+var MODEL_SETTINGS_VERSION = 3;
 var modelSettings = loadModelSettings();
 var themeNames = [
   'theme-default', 'theme-light',
@@ -926,6 +961,9 @@ function loadPersonalization() {
     var accentColor = typeof saved.accentColor === 'string' && /^#[0-9a-f]{6}$/i.test(saved.accentColor)
       ? saved.accentColor
       : defaults.accentColor;
+    // Older versions always saved #00b4d8 (the old default), which locked every
+    // theme to cyan. Drop it once; it equals the default theme's own accent anyway.
+    if (saved.accentVersion !== 2 && accentColor.toLowerCase() === '#00b4d8') accentColor = '';
     return {
       displayName: typeof saved.displayName === 'string' ? saved.displayName.slice(0, 32) : defaults.displayName,
       accentColor: accentColor,
@@ -937,7 +975,59 @@ function loadPersonalization() {
 }
 
 function savePersonalization() {
-  localStorage.setItem('hfx_personalization', JSON.stringify(personalization));
+  localStorage.setItem('hfx_personalization', JSON.stringify(Object.assign({}, personalization, {accentVersion: 2})));
+}
+
+var THEME_FAMILIES = ['arch', 'obsidian', 'cyberpunk', 'emerald', 'violet', 'amber'];
+var systemDarkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function themeClassFor(family, mode) {
+  if (family === 'arch') return mode === 'light' ? 'theme-light' : 'theme-default';
+  return 'theme-' + family + (mode === 'light' ? '-light' : '');
+}
+
+function parseThemeClass(name) {
+  if (name === 'theme-light') return {family: 'arch', mode: 'light'};
+  var match = /^theme-([a-z]+?)(-light)?$/.exec(name || '');
+  if (!match || THEME_FAMILIES.indexOf(match[1]) < 0) return {family: 'arch', mode: 'dark'};
+  return {family: match[1], mode: match[2] ? 'light' : 'dark'};
+}
+
+// {family, mode}; mode is 'dark', 'light' or 'system'. Stored as the theme class
+// (compatible with older versions) plus the mode.
+var themeChoice = (function() {
+  var stored = parseThemeClass(localStorage.getItem('hfx_theme') || 'theme-default');
+  var mode = localStorage.getItem('hfx_theme_mode');
+  return {family: stored.family, mode: mode === 'system' ? 'system' : stored.mode};
+})();
+
+function resolvedThemeMode() {
+  if (themeChoice.mode !== 'system') return themeChoice.mode;
+  return systemDarkQuery && !systemDarkQuery.matches ? 'light' : 'dark';
+}
+
+function applyThemeChoice() {
+  var activeTheme = applyTheme(themeClassFor(themeChoice.family, resolvedThemeMode()));
+  localStorage.setItem('hfx_theme', activeTheme);
+  localStorage.setItem('hfx_theme_mode', themeChoice.mode);
+}
+
+if (systemDarkQuery && systemDarkQuery.addEventListener) {
+  systemDarkQuery.addEventListener('change', function() {
+    if (themeChoice.mode === 'system') applyThemeChoice();
+  });
+}
+
+function refreshThemePicker() {
+  document.querySelectorAll('.theme-opt').forEach(function(option) {
+    option.setAttribute('aria-pressed', option.getAttribute('data-family') === themeChoice.family ? 'true' : 'false');
+    option.classList.toggle('selected', option.getAttribute('data-family') === themeChoice.family);
+  });
+  document.querySelectorAll('.mode-opt').forEach(function(option) {
+    option.setAttribute('aria-pressed', option.getAttribute('data-mode') === themeChoice.mode ? 'true' : 'false');
+  });
+  var note = document.getElementById('themeAccentNote');
+  if (note) note.hidden = !personalization.accentColor;
 }
 
 function applyTheme(theme) {
@@ -949,18 +1039,21 @@ function applyTheme(theme) {
   document.querySelectorAll('.hyperflux-logo-img, .flash-model-logo-img').forEach(function(image) {
     image.src = 'logo_hyperflux/hyperfluxdesktop.png';
   });
-  document.querySelectorAll('.theme-opt').forEach(function(option) {
-    var selected = option.getAttribute('data-theme') === nextTheme;
-    option.classList.toggle('selected', selected);
-    option.setAttribute('aria-pressed', selected ? 'true' : 'false');
-  });
+  // A custom accent is tuned per mode (lighter on dark themes, darker on light ones).
+  applyPersonalization();
+  refreshThemePicker();
   return nextTheme;
 }
 
 function applyPersonalization() {
   var scale = {small: '0.9', medium: '1', large: '1.12'}[personalization.textSize] || '1';
   document.body.style.setProperty('--ui-scale', scale);
+  // Clear any previous custom accent so the theme's own colours show through.
+  ['--ac', '--ac2', '--ac3', '--acbg', '--acbr', '--grad', '--particle-rgb'].forEach(function(name) {
+    document.body.style.removeProperty(name);
+  });
   if (!personalization.accentColor) return;
+  var lightMode = document.body.classList.contains('theme-light-mode');
   var hex = personalization.accentColor.slice(1);
   var rgb = [
     parseInt(hex.slice(0, 2), 16),
@@ -974,8 +1067,9 @@ function applyPersonalization() {
   };
   document.body.style.setProperty('--ac', personalization.accentColor);
   document.body.style.setProperty('--ac2', toHex(dark));
-  document.body.style.setProperty('--ac3', toHex(light));
-  document.body.style.setProperty('--acbg', 'rgba(' + rgb.join(',') + ',.14)');
+  // --ac3 is used for accent text: lighter on dark themes, darker on light themes.
+  document.body.style.setProperty('--ac3', toHex(lightMode ? dark : light));
+  document.body.style.setProperty('--acbg', 'rgba(' + rgb.join(',') + (lightMode ? ',.1)' : ',.14)'));
   document.body.style.setProperty('--acbr', 'rgba(' + rgb.join(',') + ',.42)');
   document.body.style.setProperty('--grad', 'linear-gradient(135deg,' + toHex(dark) + ',' + personalization.accentColor + ')');
   document.body.style.setProperty('--particle-rgb', rgb.join(','));
@@ -988,18 +1082,15 @@ function updateGreeting() {
   $('homeGreeting').textContent = greeting + (name ? ', ' + name : ', there');
 }
 
-// Thinking needs room: prompt + history + thoughts + answer share the context window.
-var MAX_OUTPUT_TOKENS = 6144;
-var MIN_CONTEXT_TOKENS = 1024;
-var MAX_CONTEXT_TOKENS = 16384;
-var MODEL_SETTINGS_VERSION = 2;
 
 function loadModelSettings() {
-  var defaults = {temperature: 0.7, maxLength: 4096, contextLength: 8192, version: MODEL_SETTINGS_VERSION};
+  var defaults = {temperature: 0.7, maxLength: 4096, contextLength: 16384, version: MODEL_SETTINGS_VERSION};
   try {
     var saved = JSON.parse(localStorage.getItem('hfx_model_settings') || '{}');
     // Settings saved before thinking mode used 2048-token limits; move them up once.
-    var current = saved.version === MODEL_SETTINGS_VERSION;
+    // Version 2 used an 8192 context by default; move untouched defaults up once.
+    var untouchedV2 = saved.version === 2 && Number(saved.contextLength) === 8192 && Number(saved.maxLength) === 4096;
+    var current = saved.version === MODEL_SETTINGS_VERSION || (saved.version === 2 && !untouchedV2);
     return {
       temperature: Number.isFinite(Number(saved.temperature)) ? Math.min(2, Math.max(0, Number(saved.temperature))) : defaults.temperature,
       maxLength: current && Number.isInteger(Number(saved.maxLength)) ? Math.min(MAX_OUTPUT_TOKENS, Math.max(1, Number(saved.maxLength))) : defaults.maxLength,
@@ -1135,7 +1226,12 @@ function refreshSettingsForm() {
 function refreshPersonalizationForm() {
   if (!$('displayNameSetting')) return;
   $('displayNameSetting').value = personalization.displayName;
-  $('accentSetting').value = personalization.accentColor || '#00b4d8';
+  var customAccent = Boolean(personalization.accentColor);
+  $('accentCustomSetting').checked = customAccent;
+  $('accentSetting').disabled = !customAccent;
+  // Start the picker from the current theme's colour.
+  $('accentSetting').value = personalization.accentColor ||
+    (getComputedStyle(document.body).getPropertyValue('--ac').trim().match(/^#[0-9a-f]{6}$/i) || ['#00b4d8'])[0];
   $('textSizeSetting').value = personalization.textSize;
 }
 
@@ -1905,7 +2001,7 @@ var HF = (function(){
       saveSessions();
       HF.newChat();
     },
-    openThemes: function(){ $('themeOvl').classList.add('vis'); },
+    openThemes: function(){ refreshThemePicker(); $('themeOvl').classList.add('vis'); },
     closeThemes: function(){ $('themeOvl').classList.remove('vis'); },
     openSettings: function(){ refreshSettingsForm(); $('settingsOvl').classList.add('vis'); },
     closeSettings: function(){ $('settingsOvl').classList.remove('vis'); },
@@ -1930,9 +2026,9 @@ var HF = (function(){
     },
     savePersonalization: function(){
       var displayName = $('displayNameSetting').value.trim().slice(0, 32);
-      var accentColor = $('accentSetting').value;
+      var accentColor = $('accentCustomSetting').checked ? $('accentSetting').value : '';
       var textSize = $('textSizeSetting').value;
-      if (!/^#[0-9a-f]{6}$/i.test(accentColor) ||
+      if ((accentColor && !/^#[0-9a-f]{6}$/i.test(accentColor)) ||
           ['small', 'medium', 'large'].indexOf(textSize) < 0) {
         window.alert('Please choose a valid accent color and text size.');
         return;
@@ -1941,13 +2037,31 @@ var HF = (function(){
       savePersonalization();
       applyPersonalization();
       refreshPersonalizationForm();
+      refreshThemePicker();
       updateGreeting();
       this.closeSettings();
     },
     setTheme: function(theme){
-      var activeTheme = applyTheme(theme);
-      localStorage.setItem('hfx_theme', activeTheme);
-      HF.closeThemes();
+      var parsed = parseThemeClass(theme);
+      themeChoice = {family: parsed.family, mode: parsed.mode};
+      applyThemeChoice();
+    },
+    setThemeFamily: function(family){
+      if (THEME_FAMILIES.indexOf(family) < 0) return;
+      themeChoice.family = family;
+      applyThemeChoice();
+    },
+    setThemeMode: function(mode){
+      if (['dark', 'light', 'system'].indexOf(mode) < 0) return;
+      themeChoice.mode = mode;
+      applyThemeChoice();
+    },
+    clearAccent: function(){
+      personalization.accentColor = '';
+      savePersonalization();
+      applyPersonalization();
+      refreshPersonalizationForm();
+      refreshThemePicker();
     },
     pickFile: function(task){
       if (isGenerating) return;
@@ -2110,95 +2224,59 @@ var HF = (function(){
           rep_penalty: 1.05,
           stop_sequence: ['<turn|>', '<|turn>']
         };
-        var streamResponse = await fetch('http://localhost:5001/api/extra/generate/stream', {
-          signal: requestController.signal,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'text/event-stream'
-          },
-          body: JSON.stringify(generationPayload)
-        });
-
         var reply = '';
-        var streamed = false;
         var thoughtSeconds = null;
-        if ([404, 405, 501].indexOf(streamResponse.status) === -1) {
-          if (!streamResponse.ok) throw new Error('Streaming server status error: ' + streamResponse.status);
-          if (streamResponse.body && streamResponse.body.getReader) {
-            var reader = streamResponse.body.getReader();
-            var decoder = new TextDecoder();
-            var buffer = '';
-            var streamDone = false;
-            var contentNode = document.getElementById('content-' + aiRowId);
-            var renderScheduled = false;
-            if (contentNode) contentNode.classList.add('streaming');
+        var finishReason = null;
+        var continuations = 0;
+        var contentNode = document.getElementById('content-' + aiRowId);
+        var renderScheduled = false;
+        if (contentNode) contentNode.classList.add('streaming');
 
-            function scheduleStreamRender() {
-              if (renderScheduled) return;
-              renderScheduled = true;
-              requestAnimationFrame(function() {
-                renderScheduled = false;
-                if (currentSessionId !== requestSessionId || !contentNode) return;
-                var parsed = splitAssistantResponse(reply, !thinkingExempt);
-                if (parsed.reasoning && parsed.thinkingDone && thoughtSeconds === null) {
-                  thoughtSeconds = (performance.now() - generationStarted) / 1000;
-                }
-                var stickToBottom = feedNearBottom(feed);
-                renderAssistantContent(
-                  contentNode,
-                  parsed.answer,
-                  parsed.reasoning,
-                  true,
-                  {active: !parsed.thinkingDone, seconds: thoughtSeconds}
-                );
-                if (stickToBottom) feed.scrollTop = feed.scrollHeight;
-                updateJumpButton();
-              });
+        function scheduleStreamRender() {
+          if (renderScheduled) return;
+          renderScheduled = true;
+          requestAnimationFrame(function() {
+            renderScheduled = false;
+            if (currentSessionId !== requestSessionId || !contentNode) return;
+            var parsed = splitAssistantResponse(reply, !thinkingExempt);
+            if (parsed.reasoning && parsed.thinkingDone && thoughtSeconds === null) {
+              thoughtSeconds = (performance.now() - generationStarted) / 1000;
             }
-
-            function handleStreamLine(line) {
-              line = line.replace(/\r$/, '');
-              if (!line.startsWith('data:')) return;
-              var data = line.slice(5).trim();
-              if (data === '[DONE]') {
-                streamDone = true;
-                return;
-              }
-              var event = JSON.parse(data);
-              if (event && typeof event.token === 'string') {
-                reply += event.token;
-                scheduleStreamRender();
-              }
-            }
-
-            while (!streamDone) {
-              var chunk = await reader.read();
-              if (chunk.done) break;
-              buffer += decoder.decode(chunk.value, {stream: true});
-              var lines = buffer.split('\n');
-              buffer = lines.pop();
-              lines.forEach(handleStreamLine);
-            }
-            buffer += decoder.decode();
-            if (buffer) handleStreamLine(buffer);
-            streamed = reply.length > 0;
-          }
-        }
-
-        if (!streamed) {
-          var response = await fetch('http://localhost:5001/api/v1/generate', {
-            signal: requestController.signal,
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(generationPayload)
+            var stickToBottom = feedNearBottom(feed);
+            renderAssistantContent(
+              contentNode,
+              parsed.answer,
+              parsed.reasoning,
+              true,
+              {active: !parsed.thinkingDone, seconds: thoughtSeconds}
+            );
+            if (stickToBottom) feed.scrollTop = feed.scrollHeight;
+            updateJumpButton();
           });
-
-          if (!response.ok) throw new Error('Server status error: ' + response.status);
-
-          var result = await response.json();
-          reply = result.results && result.results[0] && result.results[0].text ? result.results[0].text.trim() : "No response.";
         }
+
+        // If KoboldCpp stops because the reply reached max_length, send the text so
+        // far back and let the model carry on from the same spot, so long answers
+        // (especially thinking + code) aren't cut off halfway.
+        while (true) {
+          var round = await generateRound(generationPayload, requestController.signal, function(token) {
+            reply += token;
+            scheduleStreamRender();
+          });
+          finishReason = round.finishReason;
+          if (finishReason !== 'length' || continuations >= MAX_AUTO_CONTINUE) break;
+          var roomTokens = effectiveContextLength() - Math.ceil((sessionPrompt.length + reply.length) / 3) - 64;
+          if (roomTokens < 256) {
+            finishReason = 'context';
+            break;
+          }
+          continuations++;
+          generationPayload = Object.assign({}, generationPayload, {
+            prompt: sessionPrompt + reply,
+            max_length: Math.min(modelSettings.maxLength, roomTokens)
+          });
+        }
+        if (!reply.trim()) reply = 'No response.';
         var parsedResponse = splitAssistantResponse(
           reply.replace(/<end_of_turn>|<turn\|>/g, ""),
           !thinkingExempt
@@ -2209,6 +2287,12 @@ var HF = (function(){
         if (reasoning && thoughtSeconds === null) thoughtSeconds = elapsedSeconds;
         if (!reply && reasoning) {
           reply = '_The reply ran out of room while thinking. Raise **Maximum output tokens** in Settings, or ask again._';
+        } else if (finishReason === 'length' || finishReason === 'context') {
+          reply += '\n\n_' + (finishReason === 'context'
+            ? 'This reply filled the context window (' + effectiveContextLength() + ' tokens). Type "continue" for the rest, or raise **Context window tokens** in Settings.'
+            : 'This reply was very long, so it was paused. Type "continue" for the rest.') + '_';
+        } else if (finishReason === 'error') {
+          reply += '\n\n_KoboldCpp reported an error while writing this reply, so it may be incomplete._';
         }
         lastGenerationTps = Math.ceil((reasoning.length + reply.length) / 3) / elapsedSeconds;
 
@@ -2325,6 +2409,67 @@ var HF = (function(){
     }
   };
 })();
+
+// ---- One generation request ------------------------------------------------------
+// Streams tokens to onToken. Returns {finishReason}: 'stop', 'length' (hit max_length),
+// 'error', or null when the server didn't say.
+var MAX_AUTO_CONTINUE = 3;
+
+async function generateRound(payload, signal, onToken) {
+  var streamResponse = await fetch('http://localhost:5001/api/extra/generate/stream', {
+    signal: signal,
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'Accept': 'text/event-stream'},
+    body: JSON.stringify(payload)
+  });
+  var finishReason = null;
+  var gotTokens = false;
+  if ([404, 405, 501].indexOf(streamResponse.status) === -1) {
+    if (!streamResponse.ok) throw new Error('Streaming server status error: ' + streamResponse.status);
+    if (streamResponse.body && streamResponse.body.getReader) {
+      var reader = streamResponse.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+      var streamDone = false;
+      var handleLine = function(line) {
+        line = line.replace(/\r$/, '');
+        if (!line.startsWith('data:')) return;
+        var data = line.slice(5).trim();
+        if (data === '[DONE]') { streamDone = true; return; }
+        var event = JSON.parse(data);
+        if (!event) return;
+        if (typeof event.token === 'string' && event.token) {
+          gotTokens = true;
+          onToken(event.token);
+        }
+        if (event.finish_reason) finishReason = event.finish_reason;
+      };
+      while (!streamDone) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, {stream: true});
+        var lines = buffer.split('\n');
+        buffer = lines.pop();
+        lines.forEach(handleLine);
+      }
+      buffer += decoder.decode();
+      if (buffer) handleLine(buffer);
+      if (gotTokens || finishReason) return {finishReason: finishReason};
+    }
+  }
+  // Older servers without streaming.
+  var response = await fetch('http://localhost:5001/api/v1/generate', {
+    signal: signal,
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error('Server status error: ' + response.status);
+  var result = await response.json();
+  var first = (result.results && result.results[0]) || {};
+  if (first.text) onToken(first.text);
+  return {finishReason: first.finish_reason || null};
+}
 
 // Quotes must be escaped too: escaped text is also placed inside attributes (e.g. link hrefs).
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }

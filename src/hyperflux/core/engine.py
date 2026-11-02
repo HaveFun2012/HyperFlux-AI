@@ -72,9 +72,15 @@ class HyperFluxEngine:
         return Path(configured_path.replace("\\", "/")).name
 
     def _load_model_name(self):
+        """Ask KoboldCpp for the loaded model's name and its context size."""
         model_name = kobold.fetch_model_name()
         if model_name:
             self.model_name = model_name
+        # Never ask for more context than KoboldCpp was started with; otherwise it
+        # silently trims the start of the prompt (the instructions).
+        server_context = kobold.fetch_max_context()
+        if server_context:
+            self.max_context_length = min(self.max_context_length, server_context)
 
     def _load_local_brain(self):
         if Config.BRAIN_PATH.exists():
@@ -163,8 +169,12 @@ class HyperFluxEngine:
                 transient=False,
             )
             with live_context as live:
-                def on_token(partial_response):
+                collected = []
+
+                def on_token(token):
                     nonlocal thought_seconds
+                    collected.append(token)
+                    partial_response = "".join(collected)
                     thinking, answer, thinking_done = kobold.split_thinking(partial_response)
                     if not thinking_enabled:
                         thinking = ""
@@ -188,12 +198,34 @@ class HyperFluxEngine:
                             refresh=True,
                         )
 
-                response_text = kobold.stream_generate(payload, on_token)
-                streamed = response_text is not None
-                if not streamed:
-                    if live is not None:
-                        live.update(UI.assistant_panel("", "Generating response..."), refresh=True)
-                    response_text = kobold.generate(payload)
+                # If KoboldCpp stops because the reply reached max_length, send the text
+                # so far back and let the model carry on, so long replies aren't cut off.
+                streamed = False
+                continuations = 0
+                round_payload = payload
+                while True:
+                    text, finish_reason = kobold.stream_generate(round_payload, on_token)
+                    if text is None:
+                        if live is not None:
+                            live.update(UI.assistant_panel("", "Generating response..."), refresh=True)
+                        text, finish_reason = kobold.generate(round_payload)
+                        collected.append(text)
+                    else:
+                        streamed = True
+                    if finish_reason != "length" or continuations >= Config.MAX_AUTO_CONTINUE:
+                        break
+                    so_far = full_context_prompt + "".join(collected)
+                    room = (
+                        self.max_context_length
+                        - math.ceil(len(so_far) / Config.ESTIMATED_CHARS_PER_TOKEN)
+                        - 64
+                    )
+                    if room < 256:
+                        finish_reason = "context"
+                        break
+                    continuations += 1
+                    round_payload = {**payload, "prompt": so_far, "max_length": min(self.max_length, room)}
+                response_text = "".join(collected)
 
                 reasoning, response_text = kobold.split_reasoning_summary(
                     response_text,
@@ -211,6 +243,14 @@ class HyperFluxEngine:
                 self.last_generation_tps = (
                     generated_tokens_estimate / elapsed if elapsed > 0 else 0.0
                 )
+                if response_text and finish_reason in {"length", "context"}:
+                    response_text += (
+                        "\n\n_This reply filled the context window. Type \"continue\" for the rest._"
+                        if finish_reason == "context"
+                        else "\n\n_This reply was very long, so it was paused. Type \"continue\" for the rest._"
+                    )
+                elif response_text and finish_reason == "error":
+                    response_text += "\n\n_KoboldCpp reported an error, so this reply may be incomplete._"
                 if not response_text and reasoning:
                     response_text = (
                         "_The reply ran out of room while thinking. Raise the limit with "

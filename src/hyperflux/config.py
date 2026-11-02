@@ -10,7 +10,9 @@ class Config:
     MAX_MEMORY_EXCHANGES = 14
     # Thinking needs room: prompt + history + thoughts + answer must all fit.
     # KoboldCpp's own limit (16384 by default) is the hard ceiling.
-    MAX_CONTEXT_LENGTH = 8192
+    MAX_CONTEXT_LENGTH = 16384
+    # Times a reply that hit max_length is continued automatically.
+    MAX_AUTO_CONTINUE = 3
     ESTIMATED_CHARS_PER_TOKEN = 3
     MAX_READ_FILE_CHARS = 3000
     DEFAULT_TEMPERATURE = 0.70

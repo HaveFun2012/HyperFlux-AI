@@ -5,6 +5,8 @@ import re
 
 from hyperflux.paths import user_data_directory
 
+OLD_DEFAULT_ACCENT = "#00b4d8"
+
 
 def _read_legacy_settings(path):
     if not path.exists():
@@ -33,8 +35,12 @@ def _read_legacy_settings(path):
     personalization = {}
     if isinstance(settings.get("display_name"), str):
         personalization["displayName"] = settings["display_name"][:32]
-    if isinstance(settings.get("accent_color"), str) and re.fullmatch(
-        r"#[0-9a-fA-F]{6}", settings["accent_color"]
+    # The old app always saved its default #00b4d8; importing it locked every theme
+    # to cyan, so only import a colour the user actually changed.
+    if (
+        isinstance(settings.get("accent_color"), str)
+        and re.fullmatch(r"#[0-9a-fA-F]{6}", settings["accent_color"])
+        and settings["accent_color"].lower() != OLD_DEFAULT_ACCENT
     ):
         personalization["accentColor"] = settings["accent_color"]
     if settings.get("text_size") in ("small", "medium", "large"):

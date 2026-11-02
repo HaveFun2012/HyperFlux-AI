@@ -7,17 +7,20 @@ import requests
 
 from hyperflux.config import Config
 
-STREAM_URL = (
-    Config.KOBOLD_API_URL.rsplit("/api/v1/generate", 1)[0] + "/api/extra/generate/stream"
-)
+_SERVER = Config.KOBOLD_API_URL.rsplit("/api/v1/generate", 1)[0]
+STREAM_URL = _SERVER + "/api/extra/generate/stream"
+MAX_CONTEXT_URL = _SERVER + "/api/extra/true_max_context_length"
 
 
 def stream_generate(payload, on_token):
-    """Stream a generation, calling on_token(partial_text) as tokens arrive.
+    """Stream a generation, calling on_token(new_token) as tokens arrive.
 
-    Returns the full text, or None if streaming is unsupported or produced nothing.
+    Returns (text, finish_reason). text is None if streaming is unsupported or
+    produced nothing. finish_reason is "stop", "length" (hit max_length), "error",
+    or None if the server didn't say.
     """
     tokens = []
+    finish_reason = None
     with requests.post(
         STREAM_URL,
         json=payload,
@@ -26,7 +29,7 @@ def stream_generate(payload, on_token):
         stream=True,
     ) as response:
         if response.status_code in {404, 405, 501}:
-            return None
+            return None, None
         response.raise_for_status()
         response.encoding = "utf-8"
         for line in response.iter_lines(chunk_size=1, decode_unicode=True):
@@ -44,18 +47,33 @@ def stream_generate(payload, on_token):
             token = event.get("token")
             if isinstance(token, str) and token:
                 tokens.append(token)
-                on_token("".join(tokens))
-    return "".join(tokens) if tokens else None
+                on_token(token)
+            if event.get("finish_reason"):
+                finish_reason = event["finish_reason"]
+    return ("".join(tokens) if tokens else None), finish_reason
 
 
 def generate(payload):
-    """Non-streaming generation; used when streaming isn't available."""
-    response = requests.post(Config.KOBOLD_API_URL, json=payload, timeout=120)
+    """Non-streaming generation; returns (text, finish_reason)."""
+    # Long replies on a slow PC can take minutes, so allow up to 10.
+    response = requests.post(Config.KOBOLD_API_URL, json=payload, timeout=(10, 600))
     response.raise_for_status()
     json_data = response.json()
     if "results" in json_data and isinstance(json_data["results"], list) and json_data["results"]:
-        return json_data["results"][0].get("text", "").strip()
-    return json_data.get("text", str(json_data)).strip()
+        first = json_data["results"][0]
+        return first.get("text", ""), first.get("finish_reason")
+    return json_data.get("text", str(json_data)), None
+
+
+def fetch_max_context():
+    """KoboldCpp's context size (from --contextsize), or None if unknown."""
+    try:
+        response = requests.get(MAX_CONTEXT_URL, timeout=5)
+        response.raise_for_status()
+        value = response.json().get("value")
+    except (requests.exceptions.RequestException, ValueError, AttributeError):
+        return None
+    return value if isinstance(value, int) and value > 0 else None
 
 
 def fetch_model_name():

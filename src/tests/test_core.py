@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import requests
 
+from hyperflux.config import Config
 from hyperflux.core.engine import HyperFluxEngine
 from hyperflux.core.kobold import split_reasoning_summary, split_thinking
 from hyperflux.core.math_solver import SafeMathSolver
@@ -41,6 +42,17 @@ class FakeStreamResponse:
     def iter_lines(chunk_size, decode_unicode):
         yield 'data: {"token":"Hello"}'
         yield "data: [DONE]"
+
+
+class FakeEventStream(FakeStreamResponse):
+    """A KoboldCpp stream made of the given JSON event payloads."""
+
+    def __init__(self, *events):
+        self.events = events
+
+    def iter_lines(self, chunk_size, decode_unicode):
+        for event in self.events:
+            yield "data: " + event
 
 
 class FakeNativeThinkingStreamResponse(FakeStreamResponse):
@@ -262,6 +274,30 @@ class HyperFluxCoreTests(unittest.TestCase):
         self.assertTrue(partial)
         self.assertTrue(all("6 times 7" not in update and "<|channel>" not in update for update in partial))
         self.assertEqual(partial[-1], "The answer is 42.")
+
+    def test_reply_cut_at_length_limit_is_continued(self):
+        with patch.object(HyperFluxEngine, "_load_model_name"):
+            engine = HyperFluxEngine()
+        first = FakeEventStream('{"token": "def add(a, b):\\n    ret", "finish_reason": null}',
+                                '{"token": "", "finish_reason": "length"}')
+        second = FakeEventStream('{"token": "urn a + b", "finish_reason": null}',
+                                 '{"token": "", "finish_reason": "stop"}')
+        with patch("hyperflux.core.kobold.requests.post", side_effect=[first, second]) as post:
+            response = engine.query_local_llm("Write add()", quiet=True)
+        self.assertEqual(response, "def add(a, b):\n    return a + b")
+        first_prompt = post.call_args_list[0].kwargs["json"]["prompt"]
+        second_prompt = post.call_args_list[1].kwargs["json"]["prompt"]
+        self.assertEqual(second_prompt, first_prompt + "def add(a, b):\n    ret")
+
+    def test_reply_still_cut_after_retries_says_so(self):
+        with patch.object(HyperFluxEngine, "_load_model_name"):
+            engine = HyperFluxEngine()
+        streams = [FakeEventStream('{"token": "more ", "finish_reason": null}',
+                                   '{"token": "", "finish_reason": "length"}') for _ in range(4)]
+        with patch("hyperflux.core.kobold.requests.post", side_effect=streams) as post:
+            response = engine.query_local_llm("Write a novel", quiet=True)
+        self.assertEqual(post.call_count, 1 + Config.MAX_AUTO_CONTINUE)
+        self.assertIn('Type "continue" for the rest', response)
 
     def test_out_of_room_while_thinking_says_so(self):
         with patch.object(HyperFluxEngine, "_load_model_name"):
