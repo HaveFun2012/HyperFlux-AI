@@ -158,6 +158,36 @@ def find_gguf_models():
     )
 
 
+def describe_local_models(active_path):
+    """The GGUF models this PC has, for the model picker: the active one first-class,
+    friendly names for the downloadable Gemma files, file names for the rest."""
+    # Recognised by file name, or by exact size when renamed (e.g. model.gguf).
+    known = {info["filename"].casefold(): info["label"].replace(" (Q4_K_M)", "") for info in GEMMA_MODELS.values()}
+    known_sizes = {info["size"]: info["label"].replace(" (Q4_K_M)", "") for info in GEMMA_MODELS.values()}
+    paths = {}
+    for path in [Path(active_path)] if active_path else []:
+        if path.is_file():
+            paths[str(path.resolve()).casefold()] = path.resolve()
+    for path in find_gguf_models():
+        paths.setdefault(str(path).casefold(), path)
+    active_key = str(Path(active_path).resolve()).casefold() if active_path else ""
+    models = []
+    for key, path in paths.items():
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        models.append({
+            "path": str(path),
+            "name": known.get(path.name.casefold()) or known_sizes.get(size) or path.stem,
+            "file": path.name,
+            "size_gb": round(size / 1e9, 1),
+            "active": key == active_key,
+        })
+    models.sort(key=lambda model: (not model["active"], model["name"].casefold()))
+    return models
+
+
 def load_config():
     try:
         config = json.loads(RUNTIME_CONFIG.read_text(encoding="utf-8"))

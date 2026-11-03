@@ -16,7 +16,9 @@ from PySide6.QtNetwork import QTcpSocket
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QVBoxLayout, QWidget
 
 from hyperflux.desktop.migration import migration_script as build_migration_script
+from hyperflux.desktop.model_switcher import LocalModels
 from hyperflux.desktop.process_tree import descendant_pids, terminate_pid
+from hyperflux.desktop.runtime_assets import save_config
 from hyperflux.desktop.update_bar import UpdateBar
 from hyperflux.search.bridge import load_or_create_token
 from hyperflux.paths import (
@@ -51,6 +53,9 @@ class HyperFluxWindow(QMainWindow):
         self._search_server = None
         self._search_thread = None
         self._shutting_down = False
+        self._restarting_kobold = False
+        self._kobold_alive = False
+        self.local_models = None
         self.setWindowTitle("HyperFlux AI")
         self.resize(1360, 900)
         self.setMinimumSize(900, 620)
@@ -156,21 +161,16 @@ class HyperFluxWindow(QMainWindow):
         model_running = model_socket.waitForConnected(250)
         model_socket.abort()
         if not model_running:
-            executable = self.runtime_config["kobold_path"]
-            model = self.runtime_config["model_path"]
-            KOBOLD_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            self._kobold_process = QProcess(self)
-            self._kobold_process.setWorkingDirectory(str(user_data_directory()))
-            self._kobold_process.setProcessChannelMode(
-                QProcess.ProcessChannelMode.MergedChannels
-            )
-            self._kobold_process.setStandardOutputFile(str(KOBOLD_LOG_PATH))
-            self._kobold_process.errorOccurred.connect(self._kobold_error)
-            self._kobold_process.finished.connect(self._kobold_finished)
-            self._kobold_process.start(
-                executable,
-                ["--model", model, "--port", "5001", "--skiplaunch"],
-            )
+            self._start_kobold()
+
+        # The model picker can switch models only when HyperFlux runs the server itself.
+        self.local_models = LocalModels(
+            self.runtime_config["model_path"],
+            can_switch=lambda: self._kobold_process is not None,
+            is_running=self._kobold_running,
+            parent=self,
+        )
+        self.local_models.switch_requested.connect(self._switch_model)
 
         self._search_thread = threading.Thread(
             target=self._run_search_bridge,
@@ -179,11 +179,58 @@ class HyperFluxWindow(QMainWindow):
         )
         self._search_thread.start()
 
+    def _start_kobold(self):
+        executable = self.runtime_config["kobold_path"]
+        model = self.runtime_config["model_path"]
+        KOBOLD_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self._kobold_process = QProcess(self)
+        self._kobold_process.setWorkingDirectory(str(user_data_directory()))
+        self._kobold_process.setProcessChannelMode(
+            QProcess.ProcessChannelMode.MergedChannels
+        )
+        self._kobold_process.setStandardOutputFile(str(KOBOLD_LOG_PATH))
+        self._kobold_process.errorOccurred.connect(self._kobold_error)
+        self._kobold_process.finished.connect(self._kobold_finished)
+        self._kobold_alive = True
+        self._kobold_process.start(
+            executable,
+            ["--model", model, "--port", "5001", "--skiplaunch"],
+        )
+        if self._kobold_process.state() == QProcess.ProcessState.NotRunning:
+            self._kobold_alive = False
+
+    def _kobold_running(self):
+        # Read from the bridge thread, so it reads a flag the window thread keeps.
+        return self._kobold_alive
+
+    def _switch_model(self, model_path):
+        """Stop the server and start it again with another model (model picker)."""
+        previous = self.runtime_config["model_path"]
+        self._restarting_kobold = True
+        old_process = self._kobold_process
+        try:
+            self._stop_kobold()
+        finally:
+            self._restarting_kobold = False
+        if old_process is not None:
+            old_process.deleteLater()
+        self.runtime_config = {**self.runtime_config, "model_path": model_path}
+        try:
+            save_config(model_path, self.runtime_config["kobold_path"])  # used next launch too
+        except OSError as error:
+            self.service_error.emit(f"The model was switched, but the choice could not be saved: {error}")
+        self._start_kobold()
+        failed = self._kobold_process.state() == QProcess.ProcessState.NotRunning
+        if failed:
+            self.runtime_config = {**self.runtime_config, "model_path": previous}
+        self.local_models.finished(model_path, failed=failed, previous_path=previous)
+
     def _kobold_error(self, error):
         # Crashes are reported once, by _kobold_finished.
-        if self._shutting_down or error == QProcess.ProcessError.Crashed:
+        if self._shutting_down or self._restarting_kobold or error == QProcess.ProcessError.Crashed:
             return
         if error == QProcess.ProcessError.FailedToStart:
+            self._kobold_alive = False
             message = (
                 "Could not start KoboldCpp. "
                 "Reopen setup and check the selected executable."
@@ -193,7 +240,9 @@ class HyperFluxWindow(QMainWindow):
         self.service_error.emit(message)
 
     def _kobold_finished(self, exit_code, _status):
-        if self._shutting_down or exit_code == 0:
+        if self.sender() is self._kobold_process:  # not an old, replaced process
+            self._kobold_alive = False
+        if self._shutting_down or self._restarting_kobold or exit_code == 0:
             return
         self.service_error.emit(
             f"KoboldCpp stopped unexpectedly (exit code {exit_code}). See {KOBOLD_LOG_PATH}."
@@ -225,6 +274,7 @@ class HyperFluxWindow(QMainWindow):
                 Config.SEARCH_BRIDGE_HOST,
                 Config.SEARCH_BRIDGE_PORT,
                 Config.SEARCH_RESULT_COUNT,
+                model_manager=self.local_models,
             )
             self._search_server = server
             server.serve_forever()

@@ -191,6 +191,14 @@ body{font-family:var(--font);font-size:14px;line-height:1.6;color:var(--t1);back
 .model-opt-name{font:600 13px var(--font)}
 .model-opt-desc{font:500 11.5px var(--font);color:var(--t3)}
 .model-menu-note{padding:8px 12px 4px;font-size:11px;color:var(--t3);border-top:1px solid var(--gb);margin-top:4px}
+.model-menu-head{padding:10px 12px 4px;margin-top:6px;border-top:1px solid var(--gb);font:700 11px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--t3)}
+.model-menu-head + #localModelList .model-opt:first-child{margin-top:2px}
+#localModelSection .model-menu-note{border-top:0;margin-top:0;padding-top:4px}
+.model-opt:disabled{opacity:.55;cursor:default}
+.model-opt.loading .model-opt-desc::after{content:" \00b7 loading\2026";color:var(--ac3)}
+.model-menu{max-height:calc(100vh - 16px);overflow-y:auto;overflow-x:hidden}
+#localModelList .model-opt{grid-template-columns:minmax(0,1fr)}
+#localModelList .model-opt-name,#localModelList .model-opt-desc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .think-btn{height:36px;padding:0 12px;border-radius:12px;display:inline-flex;align-items:center;gap:7px;flex-shrink:0;background:var(--gs);border:1px solid var(--gb2);color:var(--t3);font:600 12px var(--font);cursor:pointer;transition:color .15s,border-color .15s,background .15s}
 .think-btn:hover{border-color:var(--acbr);color:var(--t2)}
 .think-btn[aria-pressed="true"]{background:var(--acbg);border-color:var(--acbr);color:var(--ac3)}
@@ -491,6 +499,11 @@ body.hf-generating .msg-actions{display:none}
   <button class="model-opt" type="button" role="menuitemradio" aria-checked="false" data-model="apex" onclick="HF.setModel('apex')"><span class="model-opt-name">HyperFlux Apex 1</span><span class="model-opt-desc">Standard. Best for most tasks.</span></button>
   <button class="model-opt" type="button" role="menuitemradio" aria-checked="false" data-model="horizon" onclick="HF.setModel('horizon')"><span class="model-opt-name">HyperFlux Horizon 1</span><span class="model-opt-desc">Deep thinking for complex problems.</span></button>
   <div class="model-menu-note">All three run on your local model; they differ in speed and thinking.</div>
+  <div id="localModelSection" hidden>
+    <div class="model-menu-head">Local model</div>
+    <div id="localModelList" role="group" aria-label="Local model"></div>
+    <div class="model-menu-note">Switching reloads the model; only one is loaded at a time, so it uses no extra memory.</div>
+  </div>
 </div>
 
 <input type="file" id="readFileInput" accept=".txt,.py,.js,.ts,.html,.css,.json,.md,.log,.yaml,.yml,.toml,.ini,.bat,.ps1,.c,.cpp,.h,.java,.rs,.go,.sql" hidden onchange="HF.onFileSelected(this)">
@@ -670,6 +683,7 @@ document.addEventListener('DOMContentLoaded', function() {
   renderRandomFeatureDemo();
   checkServerStatus();
   window.setInterval(checkServerStatus, 5000);
+  loadLocalModels();
   refreshModelButtons();
   refreshThinkingButtons();
   $('feed').addEventListener('scroll', updateJumpButton, {passive: true});
@@ -911,7 +925,7 @@ function refreshModelButtons() {
   document.querySelectorAll('.model-btn').forEach(function(button) {
     button.title = activeModel().name + ': ' + activeModel().purpose + ' Click to change model.';
   });
-  document.querySelectorAll('.model-opt').forEach(function(option) {
+  document.querySelectorAll('.model-opt[data-model]').forEach(function(option) {
     option.setAttribute('aria-checked', option.dataset.model === activeModelId ? 'true' : 'false');
   });
   var logo = document.getElementById('logoModel');
@@ -1288,6 +1302,106 @@ function updateServerStatus(connected, detail) {
   label.textContent = connected
     ? 'Kobold - HyperFlux Server Connected (5001)' + (detail ? ' · ' + detail : '')
     : 'Not connected to Kobold - HyperFlux Server (5001)';
+  if (modelSwitch) {
+    dot.classList.add('checking');
+    label.textContent = 'Loading ' + modelSwitch.name + '… ' +
+      Math.round((Date.now() - modelSwitch.started) / 1000) + 's';
+  }
+}
+
+// ---- Local model switching (desktop app only) ----
+// The desktop app lists the GGUF models on this PC through the bridge and restarts
+// KoboldCpp with the chosen one. Plain browsers have no token, so the section stays hidden.
+var localModels = { available: false, models: [] };
+var modelSwitch = null;  // {name, file, started} while a model loads
+var modelSwitchTimer = null;
+
+function bridgeToken() { return window.HYPERFLUX_BRIDGE_TOKEN || ''; }
+
+async function loadLocalModels() {
+  if (!bridgeToken()) return;
+  try {
+    var response = await fetch('http://127.0.0.1:5002/local-models?token=' + encodeURIComponent(bridgeToken()), { cache: 'no-store' });
+    if (!response.ok) return;
+    var data = await response.json();
+    if (data && Array.isArray(data.models)) localModels = data;
+  } catch (error) {}
+  renderLocalModels();
+}
+
+function renderLocalModels() {
+  var section = $('localModelSection');
+  var list = $('localModelList');
+  if (!section || !list) return;
+  // Shown when there is a choice to make (or a load in progress).
+  section.hidden = !(localModels.available && (localModels.models.length > 1 || modelSwitch));
+  list.textContent = '';
+  localModels.models.forEach(function(model) {
+    var loading = !!modelSwitch && modelSwitch.file === model.file;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'model-opt' + (loading ? ' loading' : '');
+    button.setAttribute('role', 'menuitemradio');
+    button.setAttribute('aria-checked', (modelSwitch ? loading : model.active) ? 'true' : 'false');
+    button.disabled = !!modelSwitch;
+    button.dataset.path = model.path;
+    button.title = model.name + '\n' + model.path;
+    var name = document.createElement('span');
+    name.className = 'model-opt-name';
+    name.textContent = model.name;
+    var desc = document.createElement('span');
+    desc.className = 'model-opt-desc';
+    desc.textContent = model.size_gb + ' GB · ' + model.file;
+    button.appendChild(name);
+    button.appendChild(desc);
+    button.addEventListener('click', function() { switchLocalModel(model.path); });
+    list.appendChild(button);
+  });
+}
+
+async function switchLocalModel(path) {
+  var model = localModels.models.find(function(item) { return item.path === path; });
+  if (!model || modelSwitch) return;
+  if (model.active) { closeModelMenu(); return; }
+  if (isGenerating) {
+    window.alert('Wait for the current reply to finish (or stop it) before switching models.');
+    return;
+  }
+  if (!window.confirm('Switch to ' + model.name + ' (' + model.size_gb + ' GB)?\n\n' +
+      'HyperFlux will unload the current model and load this one. This can take a minute; ' +
+      'your chats are kept. HyperFlux will also use it next time you open the app.')) return;
+  closeModelMenu();
+  try {
+    var response = await fetch('http://127.0.0.1:5002/local-models/switch?token=' + encodeURIComponent(bridgeToken()), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: path })
+    });
+    var data = await response.json().catch(function() { return {}; });
+    if (!response.ok || !data.accepted) {
+      window.alert('Could not switch models: ' + (data.message || data.error || ('HTTP ' + response.status)));
+      return;
+    }
+  } catch (error) {
+    window.alert('Could not reach HyperFlux to switch models (' + (error.message || 'unknown error') + ').');
+    return;
+  }
+  modelSwitch = { name: model.name, file: model.file, started: Date.now() };
+  serverMaxContext = null;  // the new model may allow a different context size
+  renderLocalModels();
+  updateServerStatus(false);
+  if (modelSwitchTimer === null) modelSwitchTimer = window.setInterval(checkServerStatus, 1500);
+}
+
+// Called with the name KoboldCpp reports (e.g. "koboldcpp/gemma-4-E4B-it-Q4_K_M").
+function noteServerModel(modelName) {
+  if (!modelSwitch) return;
+  var stem = modelSwitch.file.replace(/\.gguf$/i, '').toLowerCase();
+  var timedOut = Date.now() - modelSwitch.started > 15 * 60 * 1000;
+  if (String(modelName).toLowerCase().indexOf(stem) === -1 && !timedOut) return;
+  modelSwitch = null;
+  if (modelSwitchTimer !== null) { window.clearInterval(modelSwitchTimer); modelSwitchTimer = null; }
+  loadLocalModels();
 }
 
 async function checkServerStatus() {
@@ -1306,13 +1420,29 @@ async function checkServerStatus() {
     var modelName = typeof data === 'string' ? data : (
       data.result || data.model || data.name || ''
     );
+    noteServerModel(modelName);
     updateServerStatus(true, modelName ? String(modelName) : '');
     if (serverMaxContext === null) loadServerMaxContext();
   } catch (error) {
     updateServerStatus(false);
+    if (modelSwitch) checkModelSwitchFailed();
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// While a model loads, notice if the server stopped instead (e.g. not enough memory).
+async function checkModelSwitchFailed() {
+  if (!modelSwitch || Date.now() - modelSwitch.started < 4000) return;
+  await loadLocalModels();
+  if (!modelSwitch || localModels.switching || localModels.server_running !== false) return;
+  var name = modelSwitch.name;
+  modelSwitch = null;
+  if (modelSwitchTimer !== null) { window.clearInterval(modelSwitchTimer); modelSwitchTimer = null; }
+  renderLocalModels();
+  updateServerStatus(false);
+  window.alert(name + ' could not be loaded; the server stopped. It may need more memory than ' +
+    'this PC has free. Open "Server logs" for details, then pick another model.');
 }
 
 async function refreshServerLogs() {
@@ -2304,15 +2434,22 @@ var HF = (function(){
       var menu = $('modelMenu');
       if (!menu.hidden) { closeModelMenu(); return; }
       refreshModelButtons();
+      renderLocalModels();
       menu.hidden = false;
       button.setAttribute('aria-expanded', 'true');
       // Open above the button when there is no room below (the chat input is at the bottom).
-      var rect = button.getBoundingClientRect();
-      var below = window.innerHeight - rect.bottom;
-      menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
-      menu.style.top = (below > menu.offsetHeight + 12 ? rect.bottom + 6 : rect.top - menu.offsetHeight - 6) + 'px';
+      var place = function() {
+        var rect = button.getBoundingClientRect();
+        var below = window.innerHeight - rect.bottom;
+        var top = below > menu.offsetHeight + 12 ? rect.bottom + 6 : rect.top - menu.offsetHeight - 6;
+        menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+        menu.style.top = Math.max(8, top) + 'px';
+      };
+      place();
       var current = menu.querySelector('[aria-checked="true"]');
       if (current) current.focus();
+      // Refresh the local model list (a model may have been downloaded since).
+      loadLocalModels().then(function() { if (!menu.hidden) place(); });
     },
     setModel: function(modelId){
       if (!MODEL_TIERS[modelId]) return;
@@ -2599,8 +2736,10 @@ var HF = (function(){
 
     sendOrStop: function(){
       if (isGenerating) this.stop();
+      else if (modelSwitch) window.alert(modelSwitch.name + ' is still loading. Try again in a moment.');
       else this.go();
     },
+    switchLocalModel: function(path){ switchLocalModel(path); },
 
     stop: function(){
       if (!generationController) return;

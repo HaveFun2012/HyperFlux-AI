@@ -52,6 +52,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
     result_count = 3
     kobold_log_path = KOBOLD_LOG_PATH
     log_token = ""
+    model_manager = None  # desktop app only: lists and switches local models
 
     def _host_is_allowed(self):
         return bool(_ALLOWED_HOSTS.fullmatch(self.headers.get("Host", "")))
@@ -105,7 +106,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         if route == "/health":
             self._send_json(200, {"status": "ok", "service": "HyperFlux search"})
             return
-        if route != "/kobold-logs":
+        if route not in ("/kobold-logs", "/local-models"):
             self._send_json(404, {"error": "Not found."})
             return
         if not self._origin_is_allowed():
@@ -113,6 +114,12 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         if not self._log_token_is_valid():
             self._send_json(403, {"error": "Live logs are only available in the HyperFlux desktop app."})
+            return
+        if route == "/local-models":
+            if self.model_manager is None:
+                self._send_json(200, {"available": False, "switching": False, "models": []})
+            else:
+                self._send_json(200, self.model_manager.describe())
             return
 
         log_path = Path(self.kobold_log_path)
@@ -149,13 +156,17 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._discard_body()
             self._send_json(403, {"error": "Host not allowed."})
             return
-        if self.path != "/search":
+        route = urlsplit(self.path).path
+        if route not in ("/search", "/local-models/switch"):
             self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
         if not self._origin_is_allowed():
             self._discard_body()
             self._send_json(403, {"error": "Origin not allowed."})
+            return
+        if route == "/local-models/switch":
+            self._switch_model()
             return
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
@@ -185,11 +196,34 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {"query": optimized_query, "results": results})
 
+    def _switch_model(self):
+        if not self._log_token_is_valid() or self.model_manager is None:
+            self._discard_body()
+            self._send_json(403, {"error": "Model switching is only available in the HyperFlux desktop app."})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        if not 1 <= length <= 4096:
+            self._discard_body()
+            self._send_json(400, {"error": "Invalid request."})
+            return
+        try:
+            request_data = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json(400, {"error": "Request body must be valid JSON."})
+            return
+        path = request_data.get("path") if isinstance(request_data, dict) else None
+        accepted, message = self.model_manager.request_switch(path)
+        self._send_json(202 if accepted else 409, {"accepted": accepted, "message": message})
+
     def log_message(self, format_string, *args):
         return
 
 
-def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, log_token=None):
+def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, log_token=None,
+                         model_manager=None):
     handler = type(
         "HyperFluxSearchBridgeHandler",
         (_SearchBridgeHandler,),
@@ -197,6 +231,7 @@ def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, lo
             "engine": engine,
             "result_count": result_count,
             "log_token": load_or_create_token() if log_token is None else log_token,
+            "model_manager": model_manager,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)
