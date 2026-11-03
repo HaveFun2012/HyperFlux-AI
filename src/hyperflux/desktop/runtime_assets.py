@@ -19,21 +19,69 @@ KOBOLD_RELEASE_API = "https://api.github.com/repos/LostRuins/koboldcpp/releases/
 APP_DATA = user_data_directory()
 RUNTIME_CONFIG = APP_DATA / "runtime.json"
 
-# The recommended model, pinned to one exact file: a fixed repository commit, size,
+# Downloadable models, each pinned to one exact file: a fixed repository commit, size,
 # and SHA-256, so the download can't silently change. (Checked against Hugging Face
-# on 2026-11-03; it is the same file HyperFlux was developed and tested with.)
-_GEMMA_REPO = "lmstudio-community/gemma-4-E2B-it-GGUF"
-_GEMMA_COMMIT = "eed445ccfb8aef2e279df1a97e133baf06e443b4"
-GEMMA_MODEL = {
-    "label": "Gemma 4 E2B (Q4_K_M)",
-    "filename": "gemma-4-E2B-it-Q4_K_M.gguf",
-    "url": f"https://huggingface.co/{_GEMMA_REPO}/resolve/{_GEMMA_COMMIT}/gemma-4-E2B-it-Q4_K_M.gguf",
-    "size": 3_427_880_384,
-    "sha256": "71e6e8cb64a76da1a734fb8f6ba389d2784950d9902f5e87244fca0a15190c94",
-    "source_page": f"https://huggingface.co/{_GEMMA_REPO}",
+# on 2026-11-03.) E2B is the default; E4B is optional and never chosen for the user.
+_GEMMA_LICENSE = {
     "license_name": "Apache License 2.0",
     "license_url": "https://ai.google.dev/gemma/docs/gemma_4_license",
 }
+
+
+def _pinned_gemma(size_name, commit, size, sha256, **details):
+    repo = f"lmstudio-community/gemma-4-{size_name}-it-GGUF"
+    filename = f"gemma-4-{size_name}-it-Q4_K_M.gguf"
+    return {
+        "label": f"Gemma 4 {size_name} (Q4_K_M)",
+        "filename": filename,
+        "url": f"https://huggingface.co/{repo}/resolve/{commit}/{filename}",
+        "size": size,
+        "sha256": sha256,
+        "source_page": f"https://huggingface.co/{repo}",
+        **_GEMMA_LICENSE,
+        **details,
+    }
+
+
+GEMMA_MODELS = {
+    # The model HyperFlux was developed and tested with.
+    "e2b": _pinned_gemma(
+        "E2B", "eed445ccfb8aef2e279df1a97e133baf06e443b4", 3_427_880_384,
+        "71e6e8cb64a76da1a734fb8f6ba389d2784950d9902f5e87244fca0a15190c94",
+        summary="Recommended. Fast, and runs well on 8 GB of RAM.",
+        min_ram_gb=8,
+    ),
+    # Better at trick questions and real-world reasoning, but slower and heavier.
+    "e4b": _pinned_gemma(
+        "E4B", "99210a71094c6aa8559f764e0cadedd7d89de94d", 5_335_291_936,
+        "0ffb122c8b6921f13cbc34186e052524d0b5803b17f4867b7197a561400b3770",
+        summary="Optional. Better reasoning, but slower; best with 16 GB of RAM.",
+        min_ram_gb=16,
+    ),
+}
+DEFAULT_GEMMA = "e2b"
+GEMMA_MODEL = GEMMA_MODELS[DEFAULT_GEMMA]
+
+
+def total_ram_gb():
+    """This PC's installed memory in GB, or None if Windows doesn't say."""
+    try:
+        import ctypes
+
+        class _MemoryStatus(ctypes.Structure):
+            _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong),
+                        ("total", ctypes.c_ulonglong), ("available", ctypes.c_ulonglong),
+                        ("total_page", ctypes.c_ulonglong), ("available_page", ctypes.c_ulonglong),
+                        ("total_virtual", ctypes.c_ulonglong), ("available_virtual", ctypes.c_ulonglong),
+                        ("available_extended", ctypes.c_ulonglong)]
+
+        status = _MemoryStatus()
+        status.length = ctypes.sizeof(status)
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return None
+        return status.total / 1024 ** 3
+    except (AttributeError, OSError):
+        return None
 
 
 def is_gguf(path):
@@ -235,19 +283,28 @@ def sha256_of(path, is_cancelled=lambda: False):
     return digest.hexdigest()
 
 
-def model_download_path():
-    """Where the recommended model is saved (outside the install folder, per user)."""
-    return APP_DATA / "models" / GEMMA_MODEL["filename"]
+def _gemma(model_key):
+    if model_key is None:
+        return GEMMA_MODEL  # looked up at call time so tests can replace it
+    if model_key not in GEMMA_MODELS:
+        raise ValueError(f"Unknown model choice: {model_key!r}")
+    return GEMMA_MODELS[model_key]
 
 
-def download_gemma_model(progress, log, is_cancelled):
-    """Download the recommended model, or reuse a verified copy; returns its path.
+def model_download_path(model_key=None):
+    """Where a downloadable model is saved (outside the install folder, per user)."""
+    return APP_DATA / "models" / _gemma(model_key)["filename"]
+
+
+def download_gemma_model(progress, log, is_cancelled, model_key=None):
+    """Download a pinned model (E2B unless model_key says otherwise), or reuse a
+    verified copy; returns its path.
 
     The file must match the pinned size and SHA-256. An unfinished download resumes
     from its .part file; an unexpected file at the destination is never overwritten.
     """
-    model = GEMMA_MODEL
-    destination = model_download_path()
+    model = _gemma(model_key)
+    destination = model_download_path(model_key)
     if destination.exists():
         log("Checking the model that was downloaded earlier...")
         if destination.stat().st_size == model["size"] and sha256_of(destination, is_cancelled) == model["sha256"]:

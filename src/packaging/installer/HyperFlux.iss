@@ -37,6 +37,7 @@ Source: "..\..\..\LICENSES.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\HyperFlux"; Filename: "{app}\HyperFlux.exe"
+Name: "{group}\Change HyperFlux model"; Filename: "{app}\HyperFlux.exe"; Parameters: "--setup"
 Name: "{autodesktop}\HyperFlux"; Filename: "{app}\HyperFlux.exe"; Tasks: desktopicon
 
 [Run]

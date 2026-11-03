@@ -45,6 +45,21 @@ def run_smoke_test():
     return 0 if result == [True] else 3
 
 
+def _other_hyperflux_running():
+    """True if another HyperFlux.exe is open (two copies would fight over the server)."""
+    import subprocess
+
+    try:
+        listing = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq HyperFlux.exe", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return listing.lower().count('"hyperflux.exe"') > 1
+
+
 def main():
     application = QApplication(sys.argv)
     application.setApplicationName("HyperFlux AI")
@@ -56,8 +71,15 @@ def main():
     if getattr(sys, "frozen", False):
         from hyperflux.desktop.setup_wizard import ensure_runtime
 
+        change_model = "--setup" in sys.argv[1:]
+        if change_model and _other_hyperflux_running():
+            QMessageBox.information(
+                None, "Close HyperFlux first",
+                "HyperFlux is already open. Close it, then use \"Change HyperFlux model\" again.",
+            )
+            return 0
         try:
-            runtime_config = ensure_runtime()
+            runtime_config = ensure_runtime(change=change_model)
         except (OSError, RuntimeError) as error:
             QMessageBox.critical(None, "HyperFlux setup failed", str(error))
             return 1

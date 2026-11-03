@@ -44,10 +44,11 @@ class _SetupWorker(QThread):
                 raise InterruptedError
             model_path = self.model_choice
             kobold_path = self.kobold_choice
-            if model_path == "download":
+            if model_path.startswith("download:"):
                 self.progress.emit(0)
                 model_path = str(assets.download_gemma_model(
-                    self.progress.emit, self.log.emit, self.isInterruptionRequested
+                    self.progress.emit, self.log.emit, self.isInterruptionRequested,
+                    model_key=model_path.split(":", 1)[1],
                 ))
                 if self.isInterruptionRequested():
                     raise InterruptedError
@@ -138,8 +139,8 @@ class SetupWizard(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(
             "<h2>Set up HyperFlux</h2>"
-            "<p>Choose a GGUF model you already have, or download the recommended "
-            "model. HyperFlux never replaces or silently substitutes model files.</p>"
+            "<p>Choose a GGUF model you already have, or download one. HyperFlux "
+            "never replaces or silently substitutes model files.</p>"
         ))
 
         model_row = QHBoxLayout()
@@ -157,22 +158,29 @@ class SetupWizard(QDialog):
         layout.addWidget(self.detected_models_label)
         layout.addWidget(self.detected_models)
 
-        model_info = assets.GEMMA_MODEL
-        self.download_model = QCheckBox(
-            f"Download the recommended model: {model_info['label']}, "
-            f"{model_info['size'] / 1e9:.1f} GB, from Hugging Face"
-        )
+        self.download_model = QCheckBox("Download a model from Hugging Face")
         self.download_model.toggled.connect(self._toggle_model_path)
         layout.addWidget(self.download_model)
-        model_note = QLabel(
-            f"Released by Google under the <a href=\"{model_info['license_url']}\">"
-            f"{model_info['license_name']}</a>. Saved to your HyperFlux data folder; "
-            "the download is checked against a fixed SHA-256 fingerprint."
+        # E2B is pre-selected; E4B is there for anyone who wants it. RAM is shown as
+        # information only and never changes the choice.
+        self.download_choice = QComboBox()
+        for key, info in assets.GEMMA_MODELS.items():
+            self.download_choice.addItem(
+                f"{info['label']}, {info['size'] / 1e9:.1f} GB - {info['summary']}", key
+            )
+        self.download_choice.setCurrentIndex(
+            self.download_choice.findData(assets.DEFAULT_GEMMA)
         )
-        model_note.setOpenExternalLinks(True)
-        model_note.setWordWrap(True)
-        model_note.setStyleSheet("color: palette(placeholder-text); margin-left: 22px;")
-        layout.addWidget(model_note)
+        self.download_choice.setStyleSheet("margin-left: 22px;")
+        self.download_choice.currentIndexChanged.connect(self._update_model_note)
+        layout.addWidget(self.download_choice)
+        self.model_note = QLabel()
+        self.model_note.setOpenExternalLinks(True)
+        self.model_note.setWordWrap(True)
+        self.model_note.setStyleSheet("color: palette(placeholder-text); margin-left: 22px;")
+        layout.addWidget(self.model_note)
+        self._ram_gb = assets.total_ram_gb()
+        self._update_model_note()
 
         layout.addWidget(QLabel("KoboldCpp Windows executable"))
         kobold_row = QHBoxLayout()
@@ -253,12 +261,31 @@ class SetupWizard(QDialog):
     def _toggle_model_path(self, downloading):
         for widget in (self.model_path, self.model_browse, self.detected_models):
             widget.setEnabled(not downloading)
+        self.download_choice.setEnabled(downloading)
+
+    def _selected_download(self):
+        return assets.GEMMA_MODELS[self.download_choice.currentData()]
+
+    def _update_model_note(self, *_):
+        info = self._selected_download()
+        note = (
+            f"Released by Google under the <a href=\"{info['license_url']}\">"
+            f"{info['license_name']}</a>. Saved to your HyperFlux data folder; "
+            "the download is checked against a fixed SHA-256 fingerprint."
+        )
+        if self._ram_gb is not None and self._ram_gb + 0.5 < info["min_ram_gb"]:
+            note += (
+                f"<br>This PC has {self._ram_gb:.0f} GB of RAM. {info['label']} works best "
+                f"with {info['min_ram_gb']} GB, so replies may be slow and other apps may lag. "
+                "You can still choose it."
+            )
+        self.model_note.setText(note)
 
     def _confirm_model_licence(self):
         """Show the model's licence and size; True only if the user accepts."""
-        info = assets.GEMMA_MODEL
+        info = self._selected_download()
         box = QMessageBox(self)
-        box.setWindowTitle("Download Gemma 4 E2B")
+        box.setWindowTitle(f"Download {info['label']}")
         box.setIcon(QMessageBox.Icon.Information)
         box.setTextFormat(Qt.TextFormat.RichText)
         box.setText(
@@ -268,7 +295,8 @@ class SetupWizard(QDialog):
             f"Gemma 4 is made by Google and released under the "
             f"<a href=\"{info['license_url']}\">{info['license_name']}</a>. "
             "By downloading it you agree to those terms.<br><br>"
-            "You need about 3.5 GB of free disk space. You can cancel and resume later."
+            f"You need about {info['size'] / 1e9 + 0.1:.1f} GB of free disk space. "
+            "You can cancel and resume later."
         )
         accept = box.addButton("Accept and download", QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
@@ -281,7 +309,10 @@ class SetupWizard(QDialog):
 
     def _start(self):
         downloading_model = self.download_model.isChecked()
-        model_path = "download" if downloading_model else self.model_path.text().strip()
+        model_path = (
+            f"download:{self.download_choice.currentData()}"
+            if downloading_model else self.model_path.text().strip()
+        )
         kobold_path = "download" if self.download_kobold.isChecked() else self.kobold_path.text().strip()
         if downloading_model:
             if not self._confirm_model_licence():
@@ -290,7 +321,7 @@ class SetupWizard(QDialog):
             QMessageBox.warning(
                 self,
                 "Choose a model",
-                "Select a readable GGUF model, or tick the option to download the recommended one.",
+                "Select a readable GGUF model, or tick the option to download one.",
             )
             return
         if kobold_path != "download" and not assets.is_windows_executable(kobold_path):
@@ -352,16 +383,30 @@ class SetupWizard(QDialog):
                 self.log_output.appendPlainText(f"Could not write setup log file: {error}")
 
 
-def ensure_runtime(parent=None):
+def ensure_runtime(parent=None, change=False):
+    """Saved settings, or the setup dialog when there are none.
+
+    change=True (HyperFlux.exe --setup, the "Change HyperFlux model" shortcut) opens
+    the dialog anyway, filled in with the current choices; cancelling keeps them.
+    """
     config_error = None
     try:
         config = assets.load_config()
     except RuntimeError as error:
         config = None
         config_error = str(error)
-    if config:
+    if config and not change:
         return config
     wizard = SetupWizard(parent)
+    if config:
+        wizard.download_model.setChecked(False)
+        wizard.model_path.setText(config["model_path"])
+        wizard.kobold_path.setText(config["kobold_path"])
+        wizard.download_kobold.setChecked(False)
+        wizard._append_log(f"Current model: {config['model_path']}")
+        if wizard.exec() != QDialog.DialogCode.Accepted or not wizard.result_config:
+            return config
+        return wizard.result_config
     if config_error:
         wizard._append_log(f"Saved setup settings need repair: {config_error}")
     elif assets.RUNTIME_CONFIG.exists():

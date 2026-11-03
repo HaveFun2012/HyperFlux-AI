@@ -259,5 +259,31 @@ class GemmaDownloadTests(unittest.TestCase):
         self.assertRegex(url, r"/resolve/[0-9a-f]{40}/")
         self.assertRegex(runtime_assets.GEMMA_MODEL["sha256"], r"^[0-9a-f]{64}$")
 
+    def test_e2b_is_the_default_and_e4b_is_an_optional_pinned_choice(self):
+        self.assertEqual(runtime_assets.DEFAULT_GEMMA, "e2b")
+        self.assertIs(runtime_assets.GEMMA_MODEL, runtime_assets.GEMMA_MODELS["e2b"])
+        for key, info in runtime_assets.GEMMA_MODELS.items():
+            self.assertRegex(info["url"], r"^https://huggingface\.co/.+/resolve/[0-9a-f]{40}/", key)
+            self.assertRegex(info["sha256"], r"^[0-9a-f]{64}$", key)
+            self.assertTrue(info["url"].endswith(info["filename"]), key)
+        self.assertNotEqual(runtime_assets.GEMMA_MODELS["e2b"]["filename"],
+                            runtime_assets.GEMMA_MODELS["e4b"]["filename"])
+        with self.assertRaises(ValueError):
+            runtime_assets.model_download_path("e9b")
+
+    def test_chosen_model_is_the_one_downloaded(self):
+        data = b"GGUF" + b"v" * 4000
+        e4b = {**self._fake_model(data), "filename": "e4b-test.gguf", "url": "https://huggingface.co/x/e4b-test.gguf"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with (
+                patch.object(runtime_assets, "APP_DATA", root),
+                patch.dict(runtime_assets.GEMMA_MODELS, {"e4b": e4b}),
+                patch("hyperflux.desktop.runtime_assets.requests.get", return_value=_FakeResponse([data])) as get,
+            ):
+                path = runtime_assets.download_gemma_model(lambda _: None, lambda _: None, lambda: False, model_key="e4b")
+            self.assertEqual(path, root / "models" / "e4b-test.gguf")
+            self.assertEqual(get.call_args.args[0], "https://huggingface.co/x/e4b-test.gguf")
+
 if __name__ == "__main__":
     unittest.main()
