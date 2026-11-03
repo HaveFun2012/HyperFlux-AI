@@ -19,6 +19,22 @@ KOBOLD_RELEASE_API = "https://api.github.com/repos/LostRuins/koboldcpp/releases/
 APP_DATA = user_data_directory()
 RUNTIME_CONFIG = APP_DATA / "runtime.json"
 
+# The recommended model, pinned to one exact file: a fixed repository commit, size,
+# and SHA-256, so the download can't silently change. (Checked against Hugging Face
+# on 2026-11-03; it is the same file HyperFlux was developed and tested with.)
+_GEMMA_REPO = "lmstudio-community/gemma-4-E2B-it-GGUF"
+_GEMMA_COMMIT = "eed445ccfb8aef2e279df1a97e133baf06e443b4"
+GEMMA_MODEL = {
+    "label": "Gemma 4 E2B (Q4_K_M)",
+    "filename": "gemma-4-E2B-it-Q4_K_M.gguf",
+    "url": f"https://huggingface.co/{_GEMMA_REPO}/resolve/{_GEMMA_COMMIT}/gemma-4-E2B-it-Q4_K_M.gguf",
+    "size": 3_427_880_384,
+    "sha256": "71e6e8cb64a76da1a734fb8f6ba389d2784950d9902f5e87244fca0a15190c94",
+    "source_page": f"https://huggingface.co/{_GEMMA_REPO}",
+    "license_name": "Apache License 2.0",
+    "license_url": "https://ai.google.dev/gemma/docs/gemma_4_license",
+}
+
 
 def is_gguf(path):
     try:
@@ -207,3 +223,42 @@ def download(
         response.close()
 
 
+
+
+def sha256_of(path, is_cancelled=lambda: False):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for chunk in iter(lambda: source.read(4 * 1024 * 1024), b""):
+            if is_cancelled():
+                raise InterruptedError("Setup cancelled.")
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def model_download_path():
+    """Where the recommended model is saved (outside the install folder, per user)."""
+    return APP_DATA / "models" / GEMMA_MODEL["filename"]
+
+
+def download_gemma_model(progress, log, is_cancelled):
+    """Download the recommended model, or reuse a verified copy; returns its path.
+
+    The file must match the pinned size and SHA-256. An unfinished download resumes
+    from its .part file; an unexpected file at the destination is never overwritten.
+    """
+    model = GEMMA_MODEL
+    destination = model_download_path()
+    if destination.exists():
+        log("Checking the model that was downloaded earlier...")
+        if destination.stat().st_size == model["size"] and sha256_of(destination, is_cancelled) == model["sha256"]:
+            log("Reusing the verified model already on this PC.")
+            return destination
+        raise OSError(
+            f"{destination} exists but is not the expected model. "
+            "Move or delete it, then retry."
+        )
+    log(f"Downloading {model['label']} ({model['size'] / 1e9:.1f} GB) from Hugging Face. "
+        "This can take a while; you can cancel and resume later.")
+    download(model["url"], destination, model["size"], model["sha256"], progress, log, is_cancelled)
+    log("Model downloaded and verified (SHA-256 matches).")
+    return destination

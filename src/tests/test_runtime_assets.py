@@ -198,5 +198,66 @@ class HyperFluxSetupTests(unittest.TestCase):
             self.assertEqual(Path(loaded["model_path"]), model.resolve())
 
 
+
+class GemmaDownloadTests(unittest.TestCase):
+    def _fake_model(self, data):
+        return {**runtime_assets.GEMMA_MODEL, "filename": "model-test.gguf", "url": "https://huggingface.co/x/model-test.gguf",
+                "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+    def _run(self, root, model, response):
+        logs = []
+        with (
+            patch.object(runtime_assets, "APP_DATA", root),
+            patch.object(runtime_assets, "GEMMA_MODEL", model),
+            patch("hyperflux.desktop.runtime_assets.requests.get", return_value=response) as get,
+        ):
+            path = runtime_assets.download_gemma_model(lambda _: None, logs.append, lambda: False)
+        return path, get, logs
+
+    def test_download_saves_verified_model(self):
+        data = b"GGUF" + b"x" * 5000
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, get, _ = self._run(root, self._fake_model(data), _FakeResponse([data[:2000], data[2000:]]))
+            self.assertEqual(path, root / "models" / "model-test.gguf")
+            self.assertEqual(path.read_bytes(), data)
+            self.assertEqual(get.call_args.args[0], "https://huggingface.co/x/model-test.gguf")
+
+    def test_existing_verified_model_is_reused_without_downloading(self):
+        data = b"GGUF" + b"y" * 3000
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "models").mkdir()
+            (root / "models" / "model-test.gguf").write_bytes(data)
+            path, get, logs = self._run(root, self._fake_model(data), _FakeResponse([]))
+            get.assert_not_called()
+            self.assertTrue(any("Reusing" in line for line in logs))
+
+    def test_unexpected_file_is_never_overwritten(self):
+        data = b"GGUF" + b"z" * 3000
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "models").mkdir()
+            other = root / "models" / "model-test.gguf"
+            other.write_bytes(b"GGUF something else")
+            with self.assertRaises(OSError):
+                self._run(root, self._fake_model(data), _FakeResponse([data]))
+            self.assertEqual(other.read_bytes(), b"GGUF something else")
+
+    def test_corrupted_download_is_rejected(self):
+        data = b"GGUF" + b"w" * 3000
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            corrupted = data[:-1] + b"!"
+            with self.assertRaises(OSError):
+                self._run(root, self._fake_model(data), _FakeResponse([corrupted]))
+            self.assertFalse((root / "models" / "model-test.gguf").exists())
+
+    def test_pinned_model_points_at_a_fixed_hugging_face_commit(self):
+        url = runtime_assets.GEMMA_MODEL["url"]
+        self.assertTrue(url.startswith("https://huggingface.co/"))
+        self.assertRegex(url, r"/resolve/[0-9a-f]{40}/")
+        self.assertRegex(runtime_assets.GEMMA_MODEL["sha256"], r"^[0-9a-f]{64}$")
+
 if __name__ == "__main__":
     unittest.main()

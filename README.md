@@ -83,7 +83,11 @@ wraps it in an Inno Setup installer named `HyperFlux-Setup.exe`. The installer
 does not contain model weights or a KoboldCpp binary. On first launch, the
 setup wizard looks for common local asset locations and lets you browse for an
 existing GGUF/KoboldCpp executable; otherwise it offers the official KoboldCpp
-release. Model weights must be selected locally and are never downloaded or
+release. If no model is found, it offers to download the recommended
+Gemma 4 E2B Q4_K_M (3.4 GB, Apache 2.0) after showing its licence. The file is
+pinned to one Hugging Face commit (`lmstudio-community/gemma-4-E2B-it-GGUF`)
+and checked against a fixed SHA-256, and it is saved to
+`%LOCALAPPDATA%\HyperFlux\models`. Existing model files are never replaced or
 silently substituted. Setup logs are written to
 `%LOCALAPPDATA%\HyperFlux\logs\setup.log`, and user assets/settings are kept
 outside the application install directory.

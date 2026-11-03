@@ -2,7 +2,7 @@
 
 HyperFlux includes the Gemma4 Flash 1 interface and the Gen1 Gemma4 terminal
 interface. This release is a Windows desktop installer; model weights are not
-bundled.
+bundled, but setup can download the recommended model for you.
 
 ## Highlights
 
@@ -13,13 +13,14 @@ bundled.
 ## Installation
 
 Download `HyperFlux-Setup.exe` from the release page. During first-run setup,
-select an existing GGUF model. Model weights are not downloaded or bundled.
+select an existing GGUF model, or let setup download the recommended
+Gemma 4 E2B Q4_K_M (3.4 GB, Apache 2.0, SHA-256 verified).
 
 ## Requirements and downloads
 
 - Windows 10/11, x64
 - Installer size: measured by the release workflow
-- Model weights are user-selected and are not downloaded or bundled.
+- Model: your own GGUF, or the optional Gemma 4 E2B Q4_K_M download (3.4 GB); not bundled.
 - KoboldCpp: downloaded from its official release only when needed
 
 ## Known issues

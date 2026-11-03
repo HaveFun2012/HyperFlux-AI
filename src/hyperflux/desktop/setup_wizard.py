@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -44,6 +44,13 @@ class _SetupWorker(QThread):
                 raise InterruptedError
             model_path = self.model_choice
             kobold_path = self.kobold_choice
+            if model_path == "download":
+                self.progress.emit(0)
+                model_path = str(assets.download_gemma_model(
+                    self.progress.emit, self.log.emit, self.isInterruptionRequested
+                ))
+                if self.isInterruptionRequested():
+                    raise InterruptedError
             if kobold_path == "download":
                 self.progress.emit(0)
                 self.log.emit("Checking the official KoboldCpp release metadata.")
@@ -131,8 +138,8 @@ class SetupWizard(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(
             "<h2>Set up HyperFlux</h2>"
-            "<p>Select an existing GGUF model. HyperFlux will not download, "
-            "replace, or silently substitute model files.</p>"
+            "<p>Choose a GGUF model you already have, or download the recommended "
+            "model. HyperFlux never replaces or silently substitutes model files.</p>"
         ))
 
         model_row = QHBoxLayout()
@@ -149,6 +156,23 @@ class SetupWizard(QDialog):
         self.detected_models.currentIndexChanged.connect(self._select_detected_model)
         layout.addWidget(self.detected_models_label)
         layout.addWidget(self.detected_models)
+
+        model_info = assets.GEMMA_MODEL
+        self.download_model = QCheckBox(
+            f"Download the recommended model: {model_info['label']}, "
+            f"{model_info['size'] / 1e9:.1f} GB, from Hugging Face"
+        )
+        self.download_model.toggled.connect(self._toggle_model_path)
+        layout.addWidget(self.download_model)
+        model_note = QLabel(
+            f"Released by Google under the <a href=\"{model_info['license_url']}\">"
+            f"{model_info['license_name']}</a>. Saved to your HyperFlux data folder; "
+            "the download is checked against a fixed SHA-256 fingerprint."
+        )
+        model_note.setOpenExternalLinks(True)
+        model_note.setWordWrap(True)
+        model_note.setStyleSheet("color: palette(placeholder-text); margin-left: 22px;")
+        layout.addWidget(model_note)
 
         layout.addWidget(QLabel("KoboldCpp Windows executable"))
         kobold_row = QHBoxLayout()
@@ -174,7 +198,7 @@ class SetupWizard(QDialog):
         layout.addWidget(self.progress)
         layout.addWidget(self.log_output)
         self.status = QLabel(
-            "Select a GGUF model and KoboldCpp executable. KoboldCpp downloads run in the background."
+            "Choose or download a model and KoboldCpp. Downloads run in the background and can be resumed."
         )
         layout.addWidget(self.status)
 
@@ -198,6 +222,9 @@ class SetupWizard(QDialog):
         self.detected_models.setVisible(len(models) > 1)
         if models:
             self.model_path.setText(str(models[0]))
+        # Offer the download by default only when no model was found on this PC.
+        self.download_model.setChecked(not models)
+        self._toggle_model_path(self.download_model.isChecked())
         if kobold and assets.is_windows_executable(kobold):
             self.kobold_path.setText(str(kobold))
             self.download_kobold.setChecked(False)
@@ -223,18 +250,47 @@ class SetupWizard(QDialog):
             self.kobold_path.setText(path)
             self.download_kobold.setChecked(False)
 
+    def _toggle_model_path(self, downloading):
+        for widget in (self.model_path, self.model_browse, self.detected_models):
+            widget.setEnabled(not downloading)
+
+    def _confirm_model_licence(self):
+        """Show the model's licence and size; True only if the user accepts."""
+        info = assets.GEMMA_MODEL
+        box = QMessageBox(self)
+        box.setWindowTitle("Download Gemma 4 E2B")
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(
+            f"HyperFlux will download <b>{info['label']}</b> "
+            f"({info['size'] / 1e9:.1f} GB) from "
+            f"<a href=\"{info['source_page']}\">Hugging Face</a>.<br><br>"
+            f"Gemma 4 is made by Google and released under the "
+            f"<a href=\"{info['license_url']}\">{info['license_name']}</a>. "
+            "By downloading it you agree to those terms.<br><br>"
+            "You need about 3.5 GB of free disk space. You can cancel and resume later."
+        )
+        accept = box.addButton("Accept and download", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return box.clickedButton() is accept
+
     def _toggle_kobold_path(self, downloading):
         self.kobold_path.setEnabled(not downloading)
         self.kobold_browse.setEnabled(not downloading)
 
     def _start(self):
-        model_path = self.model_path.text().strip()
+        downloading_model = self.download_model.isChecked()
+        model_path = "download" if downloading_model else self.model_path.text().strip()
         kobold_path = "download" if self.download_kobold.isChecked() else self.kobold_path.text().strip()
-        if not assets.is_gguf(model_path):
+        if downloading_model:
+            if not self._confirm_model_licence():
+                return
+        elif not assets.is_gguf(model_path):
             QMessageBox.warning(
                 self,
                 "Choose a model",
-                "Select a readable GGUF model. Model downloads are not configured.",
+                "Select a readable GGUF model, or tick the option to download the recommended one.",
             )
             return
         if kobold_path != "download" and not assets.is_windows_executable(kobold_path):

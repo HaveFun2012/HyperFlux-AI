@@ -25,10 +25,15 @@ included with the installer.
   release when no compatible user-selected copy exists. Review the exact
   version's license and redistribution/source-notice requirements. Do not
   bundle its binary until that review is complete.
-- **Gemma 4 E2B Q4_K_M GGUF:** the local model file is user-provided and is
-  not included in the installer or source repository. Confirm its exact
-  hosting/conversion source and review the applicable Gemma and host terms
-  before use or redistribution.
+- **Gemma 4 E2B Q4_K_M GGUF:** not included in the installer or source
+  repository. Setup can download it on the user's request, after showing the
+  licence: `lmstudio-community/gemma-4-E2B-it-GGUF`, commit
+  `eed445ccfb8aef2e279df1a97e133baf06e443b4`, file
+  `gemma-4-E2B-it-Q4_K_M.gguf`, 3,427,880,384 bytes, SHA-256
+  `71e6e8cb64a76da1a734fb8f6ba389d2784950d9902f5e87244fca0a15190c94`.
+  Gemma 4 is released by Google under the Apache License 2.0
+  (https://ai.google.dev/gemma/docs/gemma_4_license). HyperFlux does not
+  redistribute the weights; users download them directly from Hugging Face.
 
 ## Release checklist
 
