@@ -6,6 +6,9 @@
 /src/koboldcpp.exe.download
 /src/build/
 /src/dist/
+# Extra build copies some tools make while dist/ is locked (e.g. dist-updated/)
+/src/build-*/
+/src/dist-*/
 /src/packaging/hyperflux.ico
 
 # Python-generated files

@@ -94,17 +94,27 @@ outside the application install directory.
 
 ### Build locally
 
-On 64-bit Windows with Python 3.14.8 and Inno Setup 6 installed:
+On 64-bit Windows with Python 3.14.8 and Inno Setup 6 installed, close HyperFlux
+(its files are locked while it runs), then:
 
 ```powershell
 python -m pip install -r src\requirements-release.txt
-python src\packaging\build_icon.py
-python -m PyInstaller --noconfirm --clean --distpath src\dist --workpath src\build src\packaging\hyperflux.spec
-$env:HYPERFLUX_VERSION = "0.0.0-dev"
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" src\packaging\installer\HyperFlux.iss
 python -m unittest discover -s src\tests -t src -v
-.\src\dist\HyperFlux\HyperFlux.exe --smoke-test
+powershell -ExecutionPolicy Bypass -File src\packaging\build_release.ps1
 ```
+
+`build_release.ps1` builds the app, smoke-tests it, builds the installer and
+writes the release notes. It takes the version from `src\hyperflux\version.py`.
+The result is `src\dist\HyperFlux-Setup.exe`, plus its `.sha256` and
+`RELEASE-NOTES.md`.
+
+### Releasing a new version
+
+1. Set `__version__` in `src\hyperflux\version.py` (for example `"1.1.0"`).
+2. Commit, then tag and push it: `git tag v1.1.0` and `git push origin v1.1.0`.
+   The workflow refuses to build if the tag and `version.py` differ.
+3. Publish a GitHub release for the tag with `HyperFlux-Setup.exe` attached.
+   Installed copies of HyperFlux will then offer the update.
 
 The setup workflow runs on a `v*` tag and stores the installer, its SHA-256,
 and generated release notes as a GitHub Actions artifact. It does not create

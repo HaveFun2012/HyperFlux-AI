@@ -2461,10 +2461,15 @@ var HF = (function(){
         // far back and let the model carry on from the same spot, so long answers
         // (especially thinking + code) aren't cut off halfway.
         while (true) {
+          var roundStart = reply.length;
           var round = await generateRound(generationPayload, requestController.signal, function(token) {
             reply += token;
             scheduleStreamRender();
           });
+          if (round.replaceWith !== undefined) {
+            reply = reply.slice(0, roundStart) + round.replaceWith;
+            scheduleStreamRender();
+          }
           finishReason = round.finishReason;
           if (finishReason !== 'length' || continuations >= MAX_AUTO_CONTINUE) break;
           var roomTokens = effectiveContextLength() - Math.ceil((sessionPrompt.length + reply.length) / 3) - 64;
@@ -2627,59 +2632,57 @@ var HF = (function(){
 var MAX_AUTO_CONTINUE = 3;
 
 async function generateRound(payload, signal, onToken) {
-  var streamResponse = await fetch('http://localhost:5001/api/extra/generate/stream', {
-    signal: signal,
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'Accept': 'text/event-stream'},
-    body: JSON.stringify(payload)
-  });
-  var finishReason = null;
-  var gotTokens = false;
-  if ([404, 405, 501].indexOf(streamResponse.status) === -1) {
-    if (!streamResponse.ok) throw new Error('Streaming server status error: ' + streamResponse.status);
-    if (streamResponse.body && streamResponse.body.getReader) {
-      var reader = streamResponse.body.getReader();
-      var decoder = new TextDecoder();
-      var buffer = '';
-      var streamDone = false;
-      var handleLine = function(line) {
-        line = line.replace(/\r$/, '');
-        if (!line.startsWith('data:')) return;
-        var data = line.slice(5).trim();
-        if (data === '[DONE]') { streamDone = true; return; }
-        var event = JSON.parse(data);
-        if (!event) return;
-        if (typeof event.token === 'string' && event.token) {
-          gotTokens = true;
-          onToken(event.token);
+  // Each request gets its own genkey. Live text comes from polling KoboldCpp with
+  // that key (which only ever returns this request's text), and the request's own
+  // response is the final answer. KoboldCpp's streaming endpoint sometimes delivered
+  // the PREVIOUS reply's text to a new request, which showed up as repeated answers.
+  var genkey = 'HFX' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var body = JSON.stringify(Object.assign({}, payload, {genkey: genkey}));
+  var shown = '';
+  var finished = false;
+
+  async function pollLiveText() {
+    while (!finished && !signal.aborted) {
+      await new Promise(function(resolve) { setTimeout(resolve, 250); });
+      if (finished || signal.aborted) return;
+      try {
+        var check = await fetch('http://localhost:5001/api/extra/generate/check', {
+          signal: signal, method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({genkey: genkey})
+        });
+        var data = await check.json();
+        var text = (data.results && data.results[0] && data.results[0].text) || '';
+        // Only ever extend what is shown; never jump to unrelated text.
+        if (!finished && text.length > shown.length && text.slice(0, shown.length) === shown) {
+          onToken(text.slice(shown.length));
+          shown = text;
         }
-        if (event.finish_reason) finishReason = event.finish_reason;
-      };
-      while (!streamDone) {
-        var chunk = await reader.read();
-        if (chunk.done) break;
-        buffer += decoder.decode(chunk.value, {stream: true});
-        var lines = buffer.split('\n');
-        buffer = lines.pop();
-        lines.forEach(handleLine);
+      } catch (error) {
+        if (signal.aborted) return;  // stopped by the user
       }
-      buffer += decoder.decode();
-      if (buffer) handleLine(buffer);
-      if (gotTokens || finishReason) return {finishReason: finishReason};
     }
   }
-  // Older servers without streaming.
-  var response = await fetch('http://localhost:5001/api/v1/generate', {
-    signal: signal,
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) throw new Error('Server status error: ' + response.status);
-  var result = await response.json();
-  var first = (result.results && result.results[0]) || {};
-  if (first.text) onToken(first.text);
-  return {finishReason: first.finish_reason || null};
+
+  var poller = pollLiveText();
+  try {
+    var response = await fetch('http://localhost:5001/api/v1/generate', {
+      signal: signal, method: 'POST', headers: {'Content-Type': 'application/json'}, body: body
+    });
+    if (!response.ok) throw new Error('Server status error: ' + response.status);
+    var result = await response.json();
+    finished = true;
+    var first = (result.results && result.results[0]) || {};
+    var finalText = typeof first.text === 'string' ? first.text : '';
+    if (finalText.slice(0, shown.length) === shown) {
+      if (finalText.length > shown.length) onToken(finalText.slice(shown.length));
+      return {finishReason: first.finish_reason || null};
+    }
+    // The live view drifted from the real result: show the real result instead.
+    return {finishReason: first.finish_reason || null, replaceWith: finalText};
+  } finally {
+    finished = true;
+    poller.catch(function() {});
+  }
 }
 
 // Quotes must be escaped too: escaped text is also placed inside attributes (e.g. link hrefs).
