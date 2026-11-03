@@ -6,7 +6,9 @@ Kept free of Qt so it can be tested and reused without a GUI.
 import hashlib
 import json
 import os
+import re
 import shutil
+import struct
 import sys
 import tempfile
 from pathlib import Path
@@ -158,6 +160,67 @@ def find_gguf_models():
     )
 
 
+_GGUF_SCALARS = {0: "B", 1: "b", 2: "H", 3: "h", 4: "I", 5: "i", 6: "f", 7: "?", 10: "Q", 11: "q", 12: "d"}
+
+
+def gguf_model_name(path):
+    """The model name stored in a GGUF file's header (e.g. "Gemma 4 E4B"), or None.
+
+    Reads only the first metadata entries; the general.* keys come before the
+    large tokenizer tables, so this stops long before the model weights.
+    """
+    def read(source, fmt):
+        size = struct.calcsize("<" + fmt)
+        data = source.read(size)
+        if len(data) != size:
+            raise ValueError("truncated GGUF header")
+        return struct.unpack("<" + fmt, data)[0]
+
+    def skip(source, kind):
+        if kind == 8:
+            source.seek(read(source, "Q"), 1)
+        elif kind == 9:
+            inner, count = read(source, "I"), read(source, "Q")
+            for _ in range(min(count, 1_000_000)):
+                skip(source, inner)
+        else:
+            source.seek(struct.calcsize("<" + _GGUF_SCALARS[kind]), 1)
+
+    found = {}
+    try:
+        with open(path, "rb") as source:
+            if source.read(4) != b"GGUF":
+                return None
+            read(source, "I")  # version
+            read(source, "Q")  # tensor count
+            for _ in range(min(read(source, "Q"), 64)):
+                key_length = read(source, "Q")
+                if key_length > 256:
+                    break
+                key = source.read(key_length).decode("utf-8", "replace")
+                kind = read(source, "I")
+                if not key.startswith("general."):
+                    break  # past the general.* block
+                if kind == 8 and key in ("general.basename", "general.name"):
+                    length = read(source, "Q")
+                    if length > 256:
+                        break
+                    found[key] = source.read(length).decode("utf-8", "replace")
+                elif kind in _GGUF_SCALARS or kind in (8, 9):
+                    skip(source, kind)
+                else:
+                    break
+    except (OSError, ValueError, KeyError, struct.error):
+        return None
+    name = found.get("general.basename") or found.get("general.name")
+    if not name:
+        return None
+    # "Gemma-4-E4B-It" -> "Gemma 4 E4B"
+    name = re.sub(r"[-_]+", " ", name).strip()
+    name = re.sub(r"\s+(?:it|instruct|chat)$", "", name, flags=re.IGNORECASE)
+    return name or None
+
+
 def describe_local_models(active_path):
     """The GGUF models this PC has, for the model picker: the active one first-class,
     friendly names for the downloadable Gemma files, file names for the rest."""
@@ -170,6 +233,11 @@ def describe_local_models(active_path):
             paths[str(path.resolve()).casefold()] = path.resolve()
     for path in find_gguf_models():
         paths.setdefault(str(path).casefold(), path)
+    # Models kept next to the current one (e.g. a second model in the same folder).
+    if active_path and Path(active_path).parent.is_dir():
+        for path in Path(active_path).parent.glob("*.gguf"):
+            if path.is_file() and is_gguf(path):
+                paths.setdefault(str(path.resolve()).casefold(), path.resolve())
     active_key = str(Path(active_path).resolve()).casefold() if active_path else ""
     models = []
     for key, path in paths.items():
@@ -179,7 +247,8 @@ def describe_local_models(active_path):
             continue
         models.append({
             "path": str(path),
-            "name": known.get(path.name.casefold()) or known_sizes.get(size) or path.stem,
+            "name": (known.get(path.name.casefold()) or known_sizes.get(size)
+                     or gguf_model_name(path) or path.stem),
             "file": path.name,
             "size_gb": round(size / 1e9, 1),
             "active": key == active_key,

@@ -32,6 +32,27 @@ class LocalModelListTests(unittest.TestCase):
         self.assertEqual([m["name"] for m in models], ["Gemma 4 E4B", "Gemma 4 E2B", "my-model"])
         self.assertEqual([m["active"] for m in models], [True, False, False])
 
+    def test_name_is_read_from_the_gguf_header_and_neighbours_are_listed(self):
+        import struct
+
+        def text(value):
+            data = value.encode()
+            return struct.pack("<Q", len(data)) + data
+
+        header = b"GGUF" + struct.pack("<IQQ", 3, 0, 3)
+        header += text("general.architecture") + struct.pack("<I", 8) + text("gemma4")
+        header += text("general.quantized_by") + struct.pack("<I", 8) + text("Unsloth")
+        header += text("general.basename") + struct.pack("<I", 8) + text("Gemma-4-E4B-It")
+        with tempfile.TemporaryDirectory() as directory:
+            active = _gguf(directory, "model.gguf")
+            neighbour = Path(directory) / "model-e4b.gguf"
+            neighbour.write_bytes(header + b"\0" * 32)
+            self.assertEqual(runtime_assets.gguf_model_name(neighbour), "Gemma 4 E4B")
+            self.assertIsNone(runtime_assets.gguf_model_name(active))  # no metadata: falls back
+            with patch.object(runtime_assets, "find_gguf_models", return_value=[]):
+                models = runtime_assets.describe_local_models(str(active))
+        self.assertEqual([m["name"] for m in models], ["model", "Gemma 4 E4B"])
+
     def test_renamed_official_model_is_recognised_by_its_size(self):
         with tempfile.TemporaryDirectory() as directory:
             renamed = _gguf(directory, "model.gguf")
