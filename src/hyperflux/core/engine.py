@@ -24,6 +24,7 @@ from hyperflux.core.prompts import (
     build_system_instruction,
     build_gemma4_prompt,
     build_thinking_instruction,
+    reality_check_hint,
     wants_thinking,
 )
 from hyperflux.search import text as search_text
@@ -148,6 +149,9 @@ class HyperFluxEngine:
         system_instruction += "\n\n" + build_thinking_instruction(
             user_prompt, self.thinking_enabled, self.model_id
         )
+        hint = reality_check_hint(user_prompt)
+        if hint:
+            system_instruction += "\n\n" + hint
         full_context_prompt = self._build_context_prompt(
             system_instruction, user_prompt, thinking_enabled
         )

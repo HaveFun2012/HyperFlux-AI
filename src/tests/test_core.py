@@ -227,11 +227,11 @@ class HyperFluxCoreTests(unittest.TestCase):
             engine = HyperFluxEngine()
         self.assertIn("**off**", engine.handle_runtime_command("/think off"))
         with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()) as post:
-            engine.query_local_llm("Solve this hard puzzle.", quiet=True)
+            engine.query_local_llm("Prove that there are infinitely many primes.", quiet=True)
         self.assertNotIn("<|think|>", post.call_args.kwargs["json"]["prompt"])
         self.assertIn("**on**", engine.handle_runtime_command("/think"))
         with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()) as post:
-            engine.query_local_llm("Solve this hard puzzle.", quiet=True)
+            engine.query_local_llm("Prove that there are infinitely many primes.", quiet=True)
         self.assertIn("<|think|>", post.call_args.kwargs["json"]["prompt"])
         self.assertEqual(engine.handle_runtime_command("/think maybe"), "Usage: /think on|off")
 

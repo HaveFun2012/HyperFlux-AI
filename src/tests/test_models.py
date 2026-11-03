@@ -80,6 +80,32 @@ class ModelTierTests(unittest.TestCase):
         self.assertIn("never thinks", engine.handle_runtime_command("/think on"))
         self.assertIn("HyperFlux Flash 1", engine.handle_runtime_command("/sys"))
 
+    def test_riddles_and_scenarios_get_a_reality_check(self):
+        from hyperflux.core.prompts import REALITY_CHECK_HINT, wants_reality_check
+
+        scenario = "I place a brick in a paper bag and lift it by the handles. What happens?"
+        riddle = "A man was born in 1990 and is 25 today. How is this possible?"
+        for question in (scenario, riddle, "Here's a riddle for you."):
+            self.assertTrue(wants_reality_check(question), question)
+        for question in ("What is the capital of Japan?", "Write a function that sorts a list."):
+            self.assertFalse(wants_reality_check(question), question)
+        # Every model gets the hint, including Flash, which never thinks.
+        for model_id in MODELS:
+            self.assertIn(REALITY_CHECK_HINT, self._payload(model_id, scenario)["prompt"])
+            self.assertNotIn(REALITY_CHECK_HINT, self._payload(model_id)["prompt"])
+        # Day and month words in a riddle get a note that they may be names.
+        from hyperflux.core.prompts import name_word_notes
+
+        cowboy = "A cowboy rides in on Friday, stays three days and leaves on Friday. How is this possible?"
+        self.assertEqual(len(name_word_notes(cowboy)), 1)
+        self.assertIn('"on Friday" can mean riding', name_word_notes(cowboy)[0])
+        self.assertEqual(name_word_notes("May I ask a riddle?"), [])
+        self.assertEqual(name_word_notes("What day comes after Friday?"), [])  # not a riddle
+        # Apex thinks about these even with Think off; Flash stays fast.
+        self.assertIn("<|think|>", self._payload("apex", scenario, think=False)["prompt"])
+        self.assertNotIn("<|think|>", self._payload("apex", think=False)["prompt"])
+        self.assertNotIn("<|think|>", self._payload("flash", scenario)["prompt"])
+
 
 if __name__ == "__main__":
     unittest.main()

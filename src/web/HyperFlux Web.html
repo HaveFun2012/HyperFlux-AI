@@ -729,11 +729,16 @@ var MODEL_COMMON_STYLE = [
   "Never open with praise or filler (\"Great question\", \"Certainly!\", \"Sure, here is\") and never restate the question. Never end with a recap of what you just said, \"I hope this helps\", or an offer of more help.",
   "Accuracy comes before brevity: never drop a step, number, condition or caveat that the answer depends on. State uncertainty once, plainly, and say what would settle it; do not pile on disclaimers. If the question touches a common misconception, correct it in one sentence.",
   "Be warm but honest. If the user is mistaken, say so kindly and explain why. Do not flatter.",
+  "Reality check: before answering a scenario, riddle or puzzle, picture what would really happen. Use real-world weights, sizes, strengths and materials, notice when something would break, spill, tear or fall, and read every word literally: a word may be a name or have a second meaning, a number may be a distractor, and the obvious answer may be the trap.",
   "In a Markdown table, put the header row, the divider row (| :--- | :--- |) and every data row each on its own line, with the same number of cells in every row."
 ];
 var MODEL_LINEUP = "HyperFlux offers three models: Flash 1 (fastest, never thinks), Apex 1 (the standard model for most tasks), Horizon 1 (always thinks deeply, for complex problems). All three run on the same locally loaded model through KoboldCpp; they differ in how much they think, how long they answer and their instructions, not in underlying intelligence.";
-var THINKING_GUIDANCE = "Think before you answer, and scale the depth of your thinking to the problem. A simple question needs only a quick check. For complex, multi-step, ambiguous, or high-stakes questions, think it through fully: restate the real goal, consider other readings of the question, work step by step, check every calculation and edge case, question your first idea, and verify the conclusion before answering. Do not cut your thinking short to save space.\nThe user sees your thinking collapsed above the answer, so the answer must stand on its own: lead with the result, then explain the key steps clearly. Do not repeat your whole thinking in the answer.";
-var DEEP_THINKING_GUIDANCE = "Think deeply and systematically before answering; this model exists for problems that need it. Restate the real goal, list what is known and what is not, consider more than one approach, work through each step carefully, check every calculation and edge case, look for mistakes in your own reasoning, and verify the conclusion before you answer. Take as long as the problem needs.\nThe user sees your thinking collapsed above the answer, so the answer must stand on its own and must not repeat your whole thinking.";
+var THINKING_GUIDANCE = "Think before you answer, and scale the depth of your thinking to the problem. A simple question needs only a quick check. For complex, multi-step, ambiguous, or high-stakes questions, think it through fully: restate the real goal, consider other readings of the question, work step by step, check every calculation and edge case, question your first idea, and verify the conclusion before answering. For riddles, trick questions and real-world scenarios, picture the situation as it would really happen and check whether any word has a second meaning before you trust the obvious answer. Do not cut your thinking short to save space.\nThe user sees your thinking collapsed above the answer, so the answer must stand on its own: lead with the result, then explain the key steps clearly. Do not repeat your whole thinking in the answer.";
+var DEEP_THINKING_GUIDANCE = "Think deeply and systematically before answering; this model exists for problems that need it. Restate the real goal, list what is known and what is not, consider more than one approach, work through each step carefully, check every calculation and edge case, look for mistakes in your own reasoning, and verify the conclusion before you answer. Simulate physical situations step by step with realistic weights, sizes, strengths and materials. Read every word literally and test it for a second meaning (a name, a pun, a distractor number), and check whether the premise itself is possible. Take as long as the problem needs.\nThe user sees your thinking collapsed above the answer, so the answer must stand on its own and must not repeat your whole thinking.";
+// Riddles, trick questions and "what happens if..." scenarios get an extra reality
+// check. Keep in step with _REALITY_CHECK_PATTERN in hyperflux/core/prompts.py.
+var REALITY_CHECK_PATTERN = /\b(?:riddle|trick question|brain ?teaser|puzzle|what am i|how (?:is|was|could|can) (?:this|that|it) (?:be )?possible|how can (?:this|that) be|what (?:happens|will happen|would happen|happened)|what do you think happens|is it possible|explain how|i (?:place|put|drop|pour|stack|carry|pick up|lift|throw|tie|leave|fill|hold|balance)\b)/i;
+var REALITY_CHECK_HINT = "This message may be a riddle, a trick question or a real-world scenario, where the obvious answer is often wrong. Check it before answering:\n1. Physical check: name each object, estimate its real weight in kg and its size, and estimate what the thing holding or carrying it can bear (cardboard, paper, glass, plastic, a shelf, a person). If the load is more than it can bear, say what fails, how, and what happens next. Also check temperature, pressure, sharp edges and balance.\n2. Word check: if the story seems impossible or contradictory, assume every sentence is literally true; the contradiction is the clue. Look for a word that could mean something else: a name (of a person, animal, ship or place), a pun, or a word with two meanings.\n3. Premise check: if the question assumes something false or impossible, say so first.\nStart the answer with the catch, in one plain sentence, then explain briefly. If there is no catch, answer normally.";
 var NO_THINKING_GUIDANCE = "Answer directly, without a separate thinking section.";
 var activeModelId = (function() {
   try {
@@ -756,10 +761,12 @@ function modelReplyBudget(modelId) {
 }
 
 // Greetings never need thinking; Flash never thinks; Horizon always does.
-function modelUsesThinking(exemptMessage, modelId) {
+// needsCheck: a riddle or real-world scenario, so a model that can think does,
+// even with Think off. Flash stays fast.
+function modelUsesThinking(exemptMessage, modelId, needsCheck) {
   var mode = MODEL_TIERS[modelId || activeModelId].thinking;
   if (mode === 'never' || exemptMessage) return false;
-  return mode === 'always' || thinkingEnabled;
+  return mode === 'always' || thinkingEnabled || !!needsCheck;
 }
 
 var isGenerating = false;
@@ -1419,6 +1426,27 @@ function removeUnrequestedAssistantSignature(reply, prompt) {
   return reply.trim();
 }
 
+// Small models read "on Friday" only as a time; in riddles a day or month name is
+// often a name (a horse called Friday). Keep in step with name_word_notes in prompts.py.
+var NAME_WORD_PATTERN = /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December)\b/g;
+var NAME_WORD_NOTE = "Second meaning to check: \"{word}\" reads like a {kind}, but in a riddle it may be a name, for example of a horse, a dog, a boat or a person. A phrase like \"on {word}\" can mean riding or sitting on something called {word}, not a time. Reread every sentence with {word} as a name; if that makes every sentence true without changing any fact, that is the answer.";
+var NAME_WORD_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function nameWordNotes(input) {
+  var text = String(input);
+  if (!REALITY_CHECK_PATTERN.test(text)) return [];
+  var seen = {};
+  var notes = [];
+  (text.match(NAME_WORD_PATTERN) || []).forEach(function(word) {
+    if (seen[word]) return;
+    seen[word] = true;
+    if (word === 'May' && !/\bon May\b|\bMay\b.*\bMay\b/.test(text)) return; // "May I ...?"
+    var kind = NAME_WORD_MONTHS.indexOf(word) >= 0 ? 'month' : 'day of the week';
+    notes.push(NAME_WORD_NOTE.split('{word}').join(word).split('{kind}').join(kind));
+  });
+  return notes;
+}
+
 function isThinkingExempt(input) {
   var normalized = String(input).trim().replace(/\s+/g, ' ');
   var greeting = /^(?:hi|hello|hey|hiya|howdy)(?: there| hyperflux)?[.!?,\s]*$|^good (?:morning|afternoon|evening|night)[.!?,\s]*$/i;
@@ -1445,6 +1473,9 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
     thinkingExempt ? NO_THINKING_GUIDANCE
       : model.thinking === 'always' ? DEEP_THINKING_GUIDANCE : THINKING_GUIDANCE
   );
+  if (REALITY_CHECK_PATTERN.test(String(prompt))) {
+    systemInstruction += '\n' + [REALITY_CHECK_HINT].concat(nameWordNotes(prompt)).join('\n');
+  }
   // Gemma 4 format. <|think|> at the top of the system turn turns on native
   // thinking; the model then writes <|channel>thought ... <channel|> before the answer.
   var systemTurn =
@@ -2403,7 +2434,7 @@ var HF = (function(){
           if (statusContent) statusContent.textContent = 'Writing an answer from live search results...';
         }
         if (requestController.signal.aborted) throw new DOMException('Stopped', 'AbortError');
-        var thinkingExempt = !modelUsesThinking(isThinkingExempt(prompt) && !attachment, requestModel);
+        var thinkingExempt = !modelUsesThinking(isThinkingExempt(prompt) && !attachment, requestModel, REALITY_CHECK_PATTERN.test(String(prompt)));
         var sessionPrompt = buildSessionPrompt(
           sessionHistory,
           modelPrompt,

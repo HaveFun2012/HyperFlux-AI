@@ -17,6 +17,9 @@ THINKING_GUIDANCE = (
     "or high-stakes questions, think it through fully: restate the real goal, consider "
     "other readings of the question, work step by step, check every calculation and "
     "edge case, question your first idea, and verify the conclusion before answering. "
+    "For riddles, trick questions and real-world scenarios, picture the situation as it "
+    "would really happen and check whether any word has a second meaning before you "
+    "trust the obvious answer. "
     "Do not cut your thinking short to save space.\n"
     "The user sees your thinking collapsed above the answer, so the answer must stand "
     "on its own: lead with the result, then explain the key steps clearly. Do not "
@@ -27,11 +30,23 @@ DEEP_THINKING_GUIDANCE = (
     "that need it. Restate the real goal, list what is known and what is not, consider "
     "more than one approach, work through each step carefully, check every calculation "
     "and edge case, look for mistakes in your own reasoning, and verify the conclusion "
-    "before you answer. Take as long as the problem needs.\n"
+    "before you answer. Simulate physical situations step by step with realistic "
+    "weights, sizes, strengths and materials. Read every word literally and test it for "
+    "a second meaning (a name, a pun, a distractor number), and check whether the premise "
+    "itself is possible. Take as long as the problem needs.\n"
     "The user sees your thinking collapsed above the answer, so the answer must stand "
     "on its own and must not repeat your whole thinking."
 )
 NO_THINKING_GUIDANCE = "Answer directly, without a separate thinking section."
+
+# Small models tend to give the statistically usual answer instead of checking reality.
+REALITY_CHECK = (
+    "Reality check: before answering a scenario, riddle or puzzle, picture what would "
+    "really happen. Use real-world weights, sizes, strengths and materials, notice when "
+    "something would break, spill, tear or fall, and read every word literally: a word "
+    "may be a name or have a second meaning, a number may be a distractor, and the "
+    "obvious answer may be the trap."
+)
 
 # Rules every model follows.
 COMMON_STYLE = [
@@ -43,6 +58,7 @@ COMMON_STYLE = [
     "do not pile on disclaimers. If the question touches a common misconception, correct "
     "it in one sentence.",
     "Be warm but honest. If the user is mistaken, say so kindly and explain why. Do not flatter.",
+    REALITY_CHECK,
     "In a Markdown table, put the header row, the divider row (| :--- | :--- |) and every "
     "data row each on its own line, with the same number of cells in every row.",
 ]
@@ -129,12 +145,16 @@ def model_lineup():
     )
 
 
-def uses_thinking(model_id, thinking_toggle, exempt_message=False):
-    """Whether this model thinks for this message (greetings never need thinking)."""
+def uses_thinking(model_id, thinking_toggle, exempt_message=False, needs_check=False):
+    """Whether this model thinks for this message (greetings never need thinking).
+
+    needs_check: the message looks like a riddle or real-world scenario, so a model
+    that can think does, even with the Think toggle off. Flash stays fast.
+    """
     mode = get_model(model_id)["thinking"]
     if mode == "never" or exempt_message:
         return False
-    return mode == "always" or bool(thinking_toggle)
+    return mode == "always" or bool(thinking_toggle) or needs_check
 
 
 def thinking_guidance(model_id, thinking):

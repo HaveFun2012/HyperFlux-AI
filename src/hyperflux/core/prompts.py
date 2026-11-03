@@ -37,11 +37,87 @@ def is_thinking_exempt(user_input):
     )
 
 
+# Riddles, trick questions and "what happens if..." scenarios: the places where a
+# small model guesses the usual answer instead of checking reality. Keep in step
+# with REALITY_CHECK_PATTERN in HyperFlux Web.html.
+_REALITY_CHECK_PATTERN = re.compile(
+    r"\b(?:riddle|trick question|brain ?teaser|puzzle|what am i|"
+    r"how (?:is|was|could|can) (?:this|that|it) (?:be )?possible|how can (?:this|that) be|"
+    r"what (?:happens|will happen|would happen|happened)|what do you think happens|"
+    r"is it possible|explain how|"
+    r"i (?:place|put|drop|pour|stack|carry|pick up|lift|throw|tie|leave|fill|hold|balance)\b)",
+    re.IGNORECASE,
+)
+# Concrete steps (estimate kg, compare with what holds it) worked far better on the
+# small model than general advice such as "picture the scene".
+REALITY_CHECK_HINT = (
+    "This message may be a riddle, a trick question or a real-world scenario, where the "
+    "obvious answer is often wrong. Check it before answering:\n"
+    "1. Physical check: name each object, estimate its real weight in kg and its size, "
+    "and estimate what the thing holding or carrying it can bear (cardboard, paper, glass, "
+    "plastic, a shelf, a person). If the load is more than it can bear, say what fails, "
+    "how, and what happens next. Also check temperature, pressure, sharp edges and balance.\n"
+    "2. Word check: if the story seems impossible or contradictory, assume every sentence "
+    "is literally true; the contradiction is the clue. Look for a word that could mean "
+    "something else: a name (of a person, animal, ship or place), a pun, or a word with "
+    "two meanings.\n"
+    "3. Premise check: if the question assumes something false or impossible, say so first.\n"
+    "Start the answer with the catch, in one plain sentence, then explain briefly. If "
+    "there is no catch, answer normally."
+)
+
+
+# Small models read "on Friday" only as a time. In riddles, a day or month name is
+# often the name of an animal, person or boat ("rode in on Friday" = on a horse called
+# Friday), so point out the second reading explicitly. Keep in step with
+# NAME_WORD_PATTERN in HyperFlux Web.html.
+_NAME_WORD_PATTERN = re.compile(
+    r"\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|"
+    r"January|February|March|April|May|June|July|August|September|October|November|December)\b"
+)
+NAME_WORD_NOTE = (
+    'Second meaning to check: "{word}" reads like a {kind}, but in a riddle it may be a '
+    "name, for example of a horse, a dog, a boat or a person. A phrase like "
+    '"on {word}" can mean riding or sitting on something called {word}, not a time. '
+    "Reread every sentence with {word} as a name; if that makes every sentence true "
+    "without changing any fact, that is the answer."
+)
+_MONTHS = {"January", "February", "March", "April", "May", "June", "July", "August",
+           "September", "October", "November", "December"}
+
+
+def wants_reality_check(user_input):
+    return bool(_REALITY_CHECK_PATTERN.search(str(user_input)))
+
+
+def name_word_notes(user_input):
+    """Notes for day/month words in a riddle that may really be names."""
+    text = str(user_input)
+    if not wants_reality_check(text):
+        return []
+    notes = []
+    for word in dict.fromkeys(_NAME_WORD_PATTERN.findall(text)):
+        if word == "May" and not re.search(r"\bon May\b|\bMay\b.*\bMay\b", text):
+            continue  # "May I ...?" is not a name
+        kind = "month" if word in _MONTHS else "day of the week"
+        notes.append(NAME_WORD_NOTE.format(word=word, kind=kind))
+    return notes
+
+
+def reality_check_hint(user_input):
+    """Extra instruction for riddle- or scenario-like messages, otherwise ''."""
+    if not wants_reality_check(user_input):
+        return ""
+    return "\n".join([REALITY_CHECK_HINT] + name_word_notes(user_input))
+
+
 # Gemma 4 thinks natively when <|think|> opens the system turn. Its thoughts come
 # back as <|channel>thought ... <channel|>, followed by the answer.
 def wants_thinking(user_input, thinking_enabled=True, model_id=DEFAULT_MODEL):
     """Whether to think: depends on the model, the Think toggle, and greetings."""
-    return uses_thinking(model_id, thinking_enabled, is_thinking_exempt(user_input))
+    return uses_thinking(
+        model_id, thinking_enabled, is_thinking_exempt(user_input), wants_reality_check(user_input)
+    )
 
 
 def build_thinking_instruction(user_input, thinking_enabled=True, model_id=DEFAULT_MODEL):
