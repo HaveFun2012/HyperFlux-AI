@@ -5,7 +5,7 @@ from hyperflux import paths
 
 class Config:
     ASSISTANT_NAME = "HyperFlux"
-    VERSION = "HyperFlux Gen 1 Gemma4"
+    VERSION = "HyperFlux terminal"
     BRAIN_PATH = paths.BRAIN_PATH
     MAX_MEMORY_EXCHANGES = 14
     # Thinking needs room: prompt + history + thoughts + answer must all fit.

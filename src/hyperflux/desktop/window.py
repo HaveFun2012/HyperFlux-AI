@@ -13,10 +13,11 @@ from PySide6.QtWebEngineCore import (
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtNetwork import QTcpSocket
-from PySide6.QtWidgets import QMainWindow, QMessageBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QVBoxLayout, QWidget
 
 from hyperflux.desktop.migration import migration_script as build_migration_script
 from hyperflux.desktop.process_tree import descendant_pids, terminate_pid
+from hyperflux.desktop.update_bar import UpdateBar
 from hyperflux.search.bridge import load_or_create_token
 from hyperflux.paths import (
     DESKTOP_LOGO,
@@ -43,7 +44,7 @@ def apply_page_settings(page):
 class HyperFluxWindow(QMainWindow):
     service_error = Signal(str)
 
-    def __init__(self, runtime_config=None):
+    def __init__(self, runtime_config=None, check_updates=False):
         super().__init__()
         self.runtime_config = runtime_config
         self._kobold_process = None
@@ -109,7 +110,18 @@ class HyperFluxWindow(QMainWindow):
         self.view = QWebEngineView(self)
         self.view.setPage(self.page)
         self.view.loadFinished.connect(self._page_loaded)
-        self.setCentralWidget(self.view)
+        # Update bar (hidden unless a newer release is found) above the web interface.
+        self.update_bar = UpdateBar(self)
+        self.update_bar.install_started.connect(self._close_for_update)
+        central = QWidget(self)
+        column = QVBoxLayout(central)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addWidget(self.update_bar)
+        column.addWidget(self.view, 1)
+        self.setCentralWidget(central)
+        if check_updates:
+            self.update_bar.check_in_background()
 
         html_path = WEB_INTERFACE
         if not html_path.is_file():
@@ -218,6 +230,11 @@ class HyperFluxWindow(QMainWindow):
             server.serve_forever()
         except OSError as error:
             self.service_error.emit(f"Could not start the local search bridge: {error}")
+
+    def _close_for_update(self):
+        # The installer replaces HyperFlux's files, so close (stopping KoboldCpp too).
+        self.close()
+        QApplication.quit()
 
     def closeEvent(self, event):
         # Stopping services on purpose must not show "stopped unexpectedly" popups.

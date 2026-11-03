@@ -134,14 +134,27 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             text = "[Earlier log output omitted. Showing the most recent 64 KiB.]\n" + text
         self._send_json(200, {"available": True, "text": text})
 
+    def _discard_body(self):
+        # Read a small request body before refusing it. Replying with the body still
+        # unread makes Windows reset the connection, so the client never sees the error.
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return
+        if 0 < length <= 8192:
+            self.rfile.read(length)
+
     def do_POST(self):
         if not self._host_is_allowed():
+            self._discard_body()
             self._send_json(403, {"error": "Host not allowed."})
             return
         if self.path != "/search":
+            self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
         if not self._origin_is_allowed():
+            self._discard_body()
             self._send_json(403, {"error": "Origin not allowed."})
             return
         try:

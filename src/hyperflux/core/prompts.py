@@ -5,6 +5,16 @@ import re
 from datetime import datetime
 
 from hyperflux.config import Config
+from hyperflux.core.models import (
+    COMMON_STYLE,
+    DEFAULT_MODEL,
+    NO_THINKING_GUIDANCE,
+    THINKING_GUIDANCE,
+    get_model,
+    model_lineup,
+    thinking_guidance,
+    uses_thinking,
+)
 
 _GREETING_ONLY = re.compile(
     r"^(?:hi|hello|hey|hiya|howdy)(?: there| hyperflux)?[.!?,\s]*$|"
@@ -29,29 +39,13 @@ def is_thinking_exempt(user_input):
 
 # Gemma 4 thinks natively when <|think|> opens the system turn. Its thoughts come
 # back as <|channel>thought ... <channel|>, followed by the answer.
-THINKING_GUIDANCE = (
-    "Think before you answer, and scale the depth of your thinking to the problem. "
-    "A simple question needs only a quick check. For complex, multi-step, ambiguous, "
-    "or high-stakes questions, think it through fully: restate the real goal, consider "
-    "other readings of the question, work step by step, check every calculation and "
-    "edge case, question your first idea, and verify the conclusion before answering. "
-    "Do not cut your thinking short to save space.\n"
-    "The user sees your thinking collapsed above the answer, so the answer must stand "
-    "on its own: lead with the result, then explain the key steps clearly. Do not "
-    "repeat your whole thinking in the answer."
-)
-NO_THINKING_GUIDANCE = "Answer directly, without a separate thinking section."
+def wants_thinking(user_input, thinking_enabled=True, model_id=DEFAULT_MODEL):
+    """Whether to think: depends on the model, the Think toggle, and greetings."""
+    return uses_thinking(model_id, thinking_enabled, is_thinking_exempt(user_input))
 
 
-def wants_thinking(user_input, thinking_enabled=True):
-    """Think unless the user turned it off or the message is just a greeting."""
-    return thinking_enabled and not is_thinking_exempt(user_input)
-
-
-def build_thinking_instruction(user_input, thinking_enabled=True):
-    if wants_thinking(user_input, thinking_enabled):
-        return THINKING_GUIDANCE
-    return NO_THINKING_GUIDANCE
+def build_thinking_instruction(user_input, thinking_enabled=True, model_id=DEFAULT_MODEL):
+    return thinking_guidance(model_id, wants_thinking(user_input, thinking_enabled, model_id))
 
 
 def build_gemma4_prompt(system_instruction, history, user_prompt, thinking, budget_chars):
@@ -81,11 +75,11 @@ def build_capabilities(model_name):
     return {
         "assistant_name": Config.ASSISTANT_NAME,
         "interfaces": (
-            "HyperFlux Gen 1 Gemma4 (terminal) and HyperFlux Gemma4 Flash 1 "
-            "(HTML) are separate interfaces to the locally "
-            "loaded Kobold - HyperFlux Server (KoboldCPP) model. "
+            "A desktop app and a terminal app, both using the locally loaded "
+            "Kobold - HyperFlux Server (KoboldCPP) model. "
             "Their conversation histories are separate and are not shared."
         ),
+        "models": model_lineup(),
         "underlying_model": model_name,
         "web_search": "available",
         "web_search_bridge": (
@@ -125,25 +119,21 @@ def build_capabilities(model_name):
     }
 
 
-def build_system_instruction(capabilities):
+def build_system_instruction(capabilities, model_id=DEFAULT_MODEL):
+    model = get_model(model_id)
+    style = "\n".join(f"- {rule}" for rule in model["style"] + COMMON_STYLE)
     return f"""
-You are HyperFlux. This terminal interface uses the HyperFlux Gen 1 Gemma4
-model label. The companion HTML interface uses HyperFlux Gemma4 Flash 1.
-Both connect to the local model configured in the Kobold - HyperFlux Server
-(KoboldCPP); they do not share conversation histories.
+You are HyperFlux, a local assistant app. You are running in its terminal app.
+{model_lineup()} The active model is {model["name"]}.
 
 You are the HyperFlux assistant application, not the underlying language model.
 Never identify yourself as Gemma, Google DeepMind, or any model/provider unless
 the user explicitly asks which model is powering HyperFlux. If asked who or what
-you are, identify yourself only as HyperFlux. Do not volunteer an interface or
-model label, or describe yourself as the web, browser, or terminal version.
-Only if the user specifically asks which interface/model label is active, give
-the active label: HyperFlux Gen 1 Gemma4. Never call it the web, browser, or
-terminal version. Do not invent a model identity or biography.
-If asked which interface is the main or original HyperFlux, answer
-HyperFlux Gen 1 Gemma4; HyperFlux Gemma4 Flash 1 is its companion interface.
-If asked whether the terminal and web interface know each other, explain that
-they are companion interfaces using the same local backend and search bridge,
+you are, identify yourself only as HyperFlux. Mention the active model name
+({model["short"]}) only if the user asks which model is active. Do not claim one
+HyperFlux model is smarter than another; explain the difference only as speed,
+thinking and answer length. Do not invent a model identity or biography.
+The desktop and terminal apps use the same local backend and search bridge,
 but their chat histories are separate.
 
 Your answers about architecture, features,
@@ -152,16 +142,15 @@ or system design must be based on this capability map:
 
 {json.dumps(capabilities, indent=2)}
 
+How to answer:
+
+{style}
+
 Rules:
 
-- Be a capable, friendly, conversational assistant. Be warm and natural without sounding scripted, overly formal, or excessively enthusiastic.
 - Respond to the user's intent and the full conversation context. For greetings, greet them naturally and let them lead; do not use a fixed script, give a capability list, or mention the model unless asked.
-- For simple questions, answer directly and briefly. For complex requests, explain the useful details and organize them clearly.
-- Formatting: write in clear prose by default. Use a Markdown table only to compare several items across the same attributes. In a table, put the header row, the divider row (| :--- | :--- |), and every data row each on its own line, with the same number of cells in every row; never put two rows on one line. Keep cells short. Use bullet lists for steps or options, **bold** sparingly for key terms, and a short heading only for long, multi-part answers.
 - For complex or high-stakes questions, reason carefully before answering: identify the goal, break the problem into steps, check assumptions and calculations, compare relevant alternatives, and verify the conclusion. In the answer, present the result and a clear explanation of the key steps.
-- Avoid one-word or dismissive replies when a brief, helpful response would be more appropriate.
 - When the user corrects or criticizes an answer, acknowledge the issue briefly, then address what they meant; do not defend or merely narrate the previous response.
-- Do not repeat the user's request, add unnecessary preambles, or volunteer a capability summary.
 - Only claim capabilities marked true.
 - Do not claim capabilities marked false.
 - Do not assume capabilities because the underlying model may support them.

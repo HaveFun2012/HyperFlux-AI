@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from hyperflux.config import Config
+from hyperflux.core.models import MODELS, get_model
 from hyperflux.core.prompts import build_file_prompt
 
 
@@ -13,6 +14,9 @@ def handle_runtime_command(engine, user_input: str, quiet=False, token_callback=
     lowered = user_input.casefold()
     if lowered == "/sys":
         return _system_status(engine)
+    model_match = re.fullmatch(r"/model(?:\s+(\S+))?", user_input.strip(), re.IGNORECASE)
+    if model_match:
+        return _set_model(engine, (model_match.group(1) or "").casefold())
     think_match = re.fullmatch(r"/think(?:\s+(\S+))?", user_input.strip(), re.IGNORECASE)
     if think_match:
         return _set_thinking(engine, (think_match.group(1) or "").casefold())
@@ -48,7 +52,8 @@ def _system_status(engine):
     )
     return (
         "### HyperFlux system status\n\n"
-        f"- **Model:** {engine.model_name}\n"
+        f"- **HyperFlux model:** {get_model(engine.model_id)['name']}\n"
+        f"- **Loaded model file:** {engine.model_name}\n"
         f"- **Context usage:** {context_usage}\n"
         f"- **Last generation speed:** {generation_speed}\n"
         f"- **Temperature:** {engine.temperature:.2f}\n"
@@ -60,7 +65,23 @@ def _system_status(engine):
     )
 
 
+def _set_model(engine, value):
+    choices = " | ".join(MODELS)
+    if value:
+        if value not in MODELS:
+            return f"Unknown model. Usage: /model {choices}"
+        engine.model_id = value
+    model = get_model(engine.model_id)
+    lines = [f"Active model: **{model['name']}**. {model['purpose']}", ""]
+    lines += [f"- `/model {key}`: {m['short']}. {m['purpose']}" for key, m in MODELS.items()]
+    return "\n".join(lines)
+
+
 def _set_thinking(engine, value):
+    locked = get_model(engine.model_id)["thinking"]
+    if locked != "toggle":
+        state = "never thinks" if locked == "never" else "always thinks"
+        return f"{get_model(engine.model_id)['short']} {state}. Use `/model apex` to choose with /think."
     if value in {"on", "off"}:
         engine.thinking_enabled = value == "on"
     elif value:

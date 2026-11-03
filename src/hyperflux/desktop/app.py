@@ -64,7 +64,8 @@ def main():
         if runtime_config is None:
             return 0
     try:
-        window = HyperFluxWindow(runtime_config)
+        # Only the installed app updates itself; source runs update with git.
+        window = HyperFluxWindow(runtime_config, check_updates=getattr(sys, "frozen", False))
     except OSError as error:
         QMessageBox.critical(
             None,

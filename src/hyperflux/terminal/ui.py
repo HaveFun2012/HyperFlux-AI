@@ -34,7 +34,7 @@ class UI:
         title = Text()
         title.append(" ✦ ", style="brand")
         title.append("HyperFlux", style="bold white")
-        title.append(" · HyperFlux Gen 1 Gemma4", style="dim")
+        title.append(" · terminal", style="dim")
         console.print(title)
 
         details = Text()
@@ -43,7 +43,7 @@ class UI:
         details.append(" · KoboldCPP :5001", style="dim")
         console.print(details)
         console.print(Text("  Ctrl+Enter: new line · Enter: send", style="dim"))
-        console.print(Text("  /help · /sys · /search · /read · /temp · /length · /exit", style="dim"))
+        console.print(Text("  /help · /model · /sys · /search · /read · /temp · /length · /exit", style="dim"))
         console.print()
 
     @staticmethod

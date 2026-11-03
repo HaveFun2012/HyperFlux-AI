@@ -41,3 +41,5 @@ Name: "{autodesktop}\HyperFlux"; Filename: "{app}\HyperFlux.exe"; Tasks: desktop
 
 [Run]
 Filename: "{app}\HyperFlux.exe"; Description: "Launch HyperFlux"; Flags: postinstall nowait skipifsilent
+; In-app updates run this installer silently; reopen HyperFlux when it's done.
+Filename: "{app}\HyperFlux.exe"; Flags: nowait; Check: WizardSilent

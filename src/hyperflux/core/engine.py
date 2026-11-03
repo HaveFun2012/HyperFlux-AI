@@ -16,6 +16,7 @@ from hyperflux.core import kobold, routing
 from hyperflux.core.commands import handle_runtime_command
 from hyperflux.core.formatting import repair_collapsed_tables
 from hyperflux.core.math_solver import SafeMathSolver
+from hyperflux.core.models import DEFAULT_MODEL, reply_budget
 from hyperflux.core.prompts import (
     MATH_INSTRUCTIONS,
     build_capabilities,
@@ -53,6 +54,8 @@ class HyperFluxEngine:
         self.last_thought_seconds = None
         # Toggled with /think on|off. On = better on hard questions, but slower.
         self.thinking_enabled = True
+        # Flash 1 / Apex 1 / Horizon 1; switched with /model.
+        self.model_id = DEFAULT_MODEL
         self._load_model_name()
         self._load_local_brain()
 
@@ -111,13 +114,17 @@ class HyperFluxEngine:
         if len(self.chat_history) > Config.MAX_MEMORY_EXCHANGES:
             self.chat_history.pop(0)
 
+    def reply_budget(self):
+        """Reply tokens for the active model (Flash is capped, Horizon gets more room)."""
+        return reply_budget(self.model_id, self.max_length, self.max_context_length)
+
     def _build_context_prompt(self, system_instruction, user_prompt, thinking=True):
         """Gemma 4 prompt with as much recent history as fits.
 
         KoboldCpp reserves max_length tokens of the context for the reply (thinking
         included), so the prompt only gets what's left.
         """
-        prompt_tokens = max(512, self.max_context_length - self.max_length)
+        prompt_tokens = max(512, self.max_context_length - self.reply_budget())
         return build_gemma4_prompt(
             system_instruction,
             [(exchange["user"], exchange["assistant"]) for exchange in self.chat_history],
@@ -135,11 +142,11 @@ class HyperFluxEngine:
     ):
         """Generate a reply. token_callback receives the answer so far (never the thinking)."""
         system_instruction = self.system_instruction or build_system_instruction(
-            self.get_capabilities()
+            self.get_capabilities(), self.model_id
         )
-        thinking_enabled = wants_thinking(user_prompt, self.thinking_enabled)
+        thinking_enabled = wants_thinking(user_prompt, self.thinking_enabled, self.model_id)
         system_instruction += "\n\n" + build_thinking_instruction(
-            user_prompt, self.thinking_enabled
+            user_prompt, self.thinking_enabled, self.model_id
         )
         full_context_prompt = self._build_context_prompt(
             system_instruction, user_prompt, thinking_enabled
@@ -150,7 +157,7 @@ class HyperFluxEngine:
         payload = {
             "prompt": full_context_prompt,
             "max_context_length": self.max_context_length,
-            "max_length": self.max_length,
+            "max_length": self.reply_budget(),
             "temperature": self.temperature,
             "top_p": 0.95,
             "rep_penalty": 1.05,
@@ -224,7 +231,7 @@ class HyperFluxEngine:
                         finish_reason = "context"
                         break
                     continuations += 1
-                    round_payload = {**payload, "prompt": so_far, "max_length": min(self.max_length, room)}
+                    round_payload = {**payload, "prompt": so_far, "max_length": min(self.reply_budget(), room)}
                 response_text = "".join(collected)
 
                 reasoning, response_text = kobold.split_reasoning_summary(
