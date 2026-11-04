@@ -124,6 +124,13 @@ def build_thinking_instruction(user_input, thinking_enabled=True, model_id=DEFAU
     return thinking_guidance(model_id, wants_thinking(user_input, thinking_enabled, model_id))
 
 
+# Gemma 4 treats <|think|> as permission, not an order, and sometimes skips thinking
+# (seen on E4B with Horizon). Opening the thought channel makes it think. The reply
+# then starts inside the channel, so the caller adds this prefix back before parsing.
+# Keep in step with THINK_PREFILL in HyperFlux Web.html.
+THINK_PREFILL = "<|channel>thought\n"
+
+
 def build_gemma4_prompt(system_instruction, history, user_prompt, thinking, budget_chars):
     """Gemma 4 chat format, keeping as much recent history as fits in budget_chars.
 
@@ -135,7 +142,7 @@ def build_gemma4_prompt(system_instruction, history, user_prompt, thinking, budg
         + ("<|think|>\n" if thinking else "")
         + f"{system_instruction}<turn|>\n"
     )
-    current_turn = f"<|turn>user\n{user_prompt}<turn|>\n<|turn>model\n"
+    current_turn = f"<|turn>user\n{user_prompt}<turn|>\n<|turn>model\n" + (THINK_PREFILL if thinking else "")
     remaining = max(0, budget_chars - len(system_turn) - len(current_turn))
     kept = []
     for user_text, model_text in reversed(history):

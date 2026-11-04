@@ -23,6 +23,7 @@ from hyperflux.core.prompts import (
     build_search_prompt,
     build_system_instruction,
     build_gemma4_prompt,
+    THINK_PREFILL,
     build_thinking_instruction,
     reality_check_hint,
     wants_thinking,
@@ -180,7 +181,9 @@ class HyperFluxEngine:
                 transient=False,
             )
             with live_context as live:
-                collected = []
+                # The prompt already opened the thought channel, so the reply starts inside it.
+                prefix = THINK_PREFILL if thinking_enabled else ""
+                collected = [prefix] if prefix else []
 
                 def on_token(token):
                     nonlocal thought_seconds
@@ -225,7 +228,7 @@ class HyperFluxEngine:
                         streamed = True
                     if finish_reason != "length" or continuations >= Config.MAX_AUTO_CONTINUE:
                         break
-                    so_far = full_context_prompt + "".join(collected)
+                    so_far = full_context_prompt + "".join(collected)[len(prefix):]  # prompt holds the prefix
                     room = (
                         self.max_context_length
                         - math.ceil(len(so_far) / Config.ESTIMATED_CHARS_PER_TOKEN)
@@ -237,6 +240,10 @@ class HyperFluxEngine:
                     continuations += 1
                     round_payload = {**payload, "prompt": so_far, "max_length": min(self.reply_budget(), room)}
                 response_text = "".join(collected)
+                # A model that ignores Gemma's thought channel (another GGUF) never
+                # closes it; if it finished normally, what it wrote is the answer.
+                if prefix and "<channel|>" not in response_text and finish_reason != "length":
+                    response_text = response_text[len(prefix):]
 
                 reasoning, response_text = kobold.split_reasoning_summary(
                     response_text,

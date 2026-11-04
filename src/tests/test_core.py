@@ -183,6 +183,7 @@ class HyperFluxCoreTests(unittest.TestCase):
         partial = []
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
+        engine.thinking_enabled = False  # plain streamed text; thinking replies are tested elsewhere
         with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()):
             response = engine.query_local_llm("test prompt", token_callback=partial.append, quiet=True)
         self.assertEqual(response, "Hello")
@@ -208,10 +209,37 @@ class HyperFluxCoreTests(unittest.TestCase):
         payload = post.call_args.kwargs["json"]
         prompt = payload["prompt"]
         self.assertTrue(prompt.startswith("<|turn>system\n<|think|>\n"))
-        self.assertTrue(prompt.endswith("<|turn>user\nCompare two approaches to this complex problem.<turn|>\n<|turn>model\n"))
+        # The thought channel is opened for the model, so it can't skip thinking.
+        self.assertTrue(prompt.endswith(
+            "<|turn>user\nCompare two approaches to this complex problem.<turn|>\n<|turn>model\n<|channel>thought\n"
+        ))
         self.assertIn("scale the depth of your thinking", prompt)
         self.assertNotIn("1-3 concise sentences", prompt)
         self.assertIn("<turn|>", payload["stop_sequence"])
+
+    def test_thinking_reply_is_split_and_continuation_does_not_repeat_the_prefix(self):
+        with patch.object(HyperFluxEngine, "_load_model_name"):
+            engine = HyperFluxEngine()
+        replies = iter([
+            # Reply 1 is cut at the length limit while still thinking...
+            ("Check 91 = 7 x 13.", "length"),
+            # ...and reply 2 finishes the thinking and the answer.
+            ("<channel|>No, 91 = 7 x 13.", "stop"),
+        ])
+        prompts = []
+
+        def fake_stream(payload, on_token):
+            prompts.append(payload["prompt"])
+            text, reason = next(replies)
+            on_token(text)
+            return text, reason
+
+        with patch("hyperflux.core.kobold.stream_generate", side_effect=fake_stream):
+            answer = engine.query_local_llm("Prove that 91 is not prime, step by step.", quiet=True)
+        self.assertIn("No, 91 = 7 x 13.", answer)
+        self.assertNotIn("Check 91", answer)  # the thinking stays out of the answer
+        self.assertTrue(prompts[1].endswith("<|channel>thought\nCheck 91 = 7 x 13."))
+        self.assertEqual(prompts[1].count("<|channel>thought"), 1)
 
     def test_name_question_prompt_skips_thinking(self):
         with patch.object(HyperFluxEngine, "_load_model_name"):
@@ -292,6 +320,7 @@ class HyperFluxCoreTests(unittest.TestCase):
     def test_reply_still_cut_after_retries_says_so(self):
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
+        engine.thinking_enabled = False  # a long answer, not long thinking
         streams = [FakeEventStream('{"token": "more ", "finish_reason": null}',
                                    '{"token": "", "finish_reason": "length"}') for _ in range(4)]
         with patch("hyperflux.core.kobold.requests.post", side_effect=streams) as post:

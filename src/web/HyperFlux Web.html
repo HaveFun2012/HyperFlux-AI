@@ -1584,6 +1584,9 @@ function isThinkingExempt(input) {
   return greeting.test(normalized) || nameQuestion.test(normalized);
 }
 
+// Start of the model's reply when it must think (keep in step with prompts.py).
+var THINK_PREFILL = '<|channel>thought\n';
+
 function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelId) {
   var model = MODEL_TIERS[modelId || activeModelId];
   var systemInstruction = [
@@ -1610,9 +1613,11 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
   // thinking; the model then writes <|channel>thought ... <channel|> before the answer.
   var systemTurn =
     '<|turn>system\n' + (thinkingExempt ? '' : '<|think|>\n') + systemInstruction + '<turn|>\n';
+  // Gemma 4 treats <|think|> as permission, not an order, and sometimes skips
+  // thinking even on Horizon. Opening the thought channel for it makes it think.
   var currentTurn =
     '<|turn>user\n' + prompt + formatAttachmentContext(attachment) +
-    '<turn|>\n<|turn>model\n';
+    '<turn|>\n<|turn>model\n' + (thinkingExempt ? '' : THINK_PREFILL);
   // KoboldCpp keeps maxLength tokens free for the reply, so the prompt gets the rest.
   var promptTokens = Math.max(512, effectiveContextLength() - modelReplyBudget(modelId));
   var historyBudget = Math.max(0, promptTokens * 3 - systemTurn.length - currentTurn.length);
@@ -2591,7 +2596,9 @@ var HF = (function(){
           rep_penalty: 1.05,
           stop_sequence: ['<turn|>', '<|turn>']
         };
-        var reply = '';
+        // The prompt already opened the thought channel, so the reply starts inside it.
+        var reply = thinkingExempt ? '' : THINK_PREFILL;
+        var replyPrefixLength = reply.length;
         var thoughtSeconds = null;
         var finishReason = null;
         var continuations = 0;
@@ -2647,11 +2654,17 @@ var HF = (function(){
           }
           continuations++;
           generationPayload = Object.assign({}, generationPayload, {
-            prompt: sessionPrompt + reply,
+            prompt: sessionPrompt + reply.slice(replyPrefixLength),  // the prompt holds the prefix
             max_length: Math.min(modelReplyBudget(requestModel), roomTokens)
           });
         }
-        if (!reply.trim()) reply = 'No response.';
+        // A model that ignores Gemma's thought channel (another GGUF) never closes it;
+        // if it finished normally, what it wrote is the answer, not thinking.
+        if (replyPrefixLength && reply.indexOf('<channel|>') === -1 && finishReason !== 'length') {
+          reply = reply.slice(replyPrefixLength);
+          replyPrefixLength = 0;
+        }
+        if (!reply.slice(replyPrefixLength).trim()) reply = 'No response.';
         streamFinished = true;
         var parsedResponse = splitAssistantResponse(
           reply.replace(/<end_of_turn>|<turn\|>/g, ""),
