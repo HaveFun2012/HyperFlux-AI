@@ -54,8 +54,9 @@ class HyperFluxEngine:
         self.last_generation_tps = None
         self.last_reasoning = ""
         self.last_thought_seconds = None
-        # Toggled with /think on|off. On = better on hard questions, but slower.
-        self.thinking_enabled = True
+        # Toggled with /think on|off. Off by default: quick, direct answers feel instant.
+        # Riddles and real-world scenarios still think (see wants_thinking); Horizon always does.
+        self.thinking_enabled = False
         # Flash 1 / Apex 1 / Horizon 1; switched with /model.
         self.model_id = DEFAULT_MODEL
         self._load_model_name()

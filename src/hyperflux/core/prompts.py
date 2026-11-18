@@ -12,6 +12,7 @@ from hyperflux.core.models import (
     THINKING_GUIDANCE,
     get_model,
     model_lineup,
+    style_examples,
     thinking_guidance,
     uses_thinking,
 )
@@ -205,8 +206,10 @@ def build_capabilities(model_name):
 def build_system_instruction(capabilities, model_id=DEFAULT_MODEL):
     model = get_model(model_id)
     style = "\n".join(f"- {rule}" for rule in model["style"] + COMMON_STYLE)
+    examples = style_examples(model_id)
+    today = datetime.now().astimezone().strftime("%A, %B %d, %Y")
     return f"""
-You are HyperFlux, a local assistant app. You are running in its terminal app.
+You are HyperFlux, a local assistant app. You are running in its terminal app. Today is {today}.
 {model_lineup()} The active model is {model["name"]}.
 
 You are the HyperFlux assistant application, not the underlying language model.
@@ -228,7 +231,7 @@ or system design must be based on this capability map:
 How to answer:
 
 {style}
-
+{chr(10) + examples + chr(10) if examples else ""}
 Rules:
 
 - Respond to the user's intent and the full conversation context. For greetings, greet them naturally and let them lead; do not use a fixed script, give a capability list, or mention the model unless asked.

@@ -201,9 +201,26 @@ class HyperFluxCoreTests(unittest.TestCase):
         self.assertIn("Desktop-specific instructions.", prompt)
         self.assertNotIn("This terminal interface", prompt)
 
-    def test_default_prompt_uses_gemma4_native_thinking(self):
+    def test_thinking_is_off_by_default_and_prompt_has_date_and_examples(self):
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
+        self.assertFalse(engine.thinking_enabled)
+        with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()) as post:
+            engine.query_local_llm("Compare two approaches to this complex problem.", quiet=True)
+        prompt = post.call_args.kwargs["json"]["prompt"]
+        self.assertNotIn("<|think|>", prompt)
+        self.assertIn("Today is ", prompt)
+        self.assertIn("Examples of how to answer (examples only, not part of this conversation)", prompt)
+        self.assertIn("User: is python or javascript better for beginners?", prompt)
+        # A riddle still gets thinking with the toggle off.
+        with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()) as post:
+            engine.query_local_llm("Here is a riddle: what has keys but can't open locks?", quiet=True)
+        self.assertIn("<|think|>", post.call_args.kwargs["json"]["prompt"])
+
+    def test_thinking_prompt_uses_gemma4_native_thinking(self):
+        with patch.object(HyperFluxEngine, "_load_model_name"):
+            engine = HyperFluxEngine()
+        engine.thinking_enabled = True
         with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()) as post:
             engine.query_local_llm("Compare two approaches to this complex problem.", quiet=True)
         payload = post.call_args.kwargs["json"]
@@ -220,6 +237,7 @@ class HyperFluxCoreTests(unittest.TestCase):
     def test_thinking_reply_is_split_and_continuation_does_not_repeat_the_prefix(self):
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
+        engine.thinking_enabled = True
         replies = iter([
             # Reply 1 is cut at the length limit while still thinking...
             ("Check 91 = 7 x 13.", "length"),
@@ -276,6 +294,7 @@ class HyperFluxCoreTests(unittest.TestCase):
     def test_thinking_is_kept_out_of_answer_and_memory(self):
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
+        engine.thinking_enabled = True
         with patch(
             "hyperflux.core.kobold.requests.post",
             return_value=FakeNativeThinkingStreamResponse(),
@@ -331,6 +350,7 @@ class HyperFluxCoreTests(unittest.TestCase):
     def test_out_of_room_while_thinking_says_so(self):
         with patch.object(HyperFluxEngine, "_load_model_name"):
             engine = HyperFluxEngine()
+        engine.thinking_enabled = True
         with patch(
             "hyperflux.core.kobold.requests.post",
             return_value=FakeUnfinishedThinkingStreamResponse(),
