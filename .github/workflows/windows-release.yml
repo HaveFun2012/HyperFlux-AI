@@ -45,7 +45,7 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          winget install --id JRSoftware.InnoSetup --exact --version 6.7.3 --silent --accept-package-agreements --accept-source-agreements
+          choco install innosetup --version=6.7.3 --yes --no-progress
 
       - name: Install pinned build dependencies
         run: python -m pip install --disable-pip-version-check -r src\requirements-release.txt
