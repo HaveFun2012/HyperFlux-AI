@@ -2,6 +2,7 @@
 
 import json
 import threading
+from pathlib import Path
 
 from PySide6.QtCore import QProcess, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QIcon
@@ -13,13 +14,21 @@ from PySide6.QtWebEngineCore import (
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtNetwork import QTcpSocket
-from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QMainWindow,
+    QMessageBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from hyperflux.desktop.migration import migration_script as build_migration_script
 from hyperflux.desktop.model_switcher import LocalModels
 from hyperflux.desktop.process_tree import descendant_pids, terminate_pid
-from hyperflux.desktop.runtime_assets import save_config
+from hyperflux.desktop.runtime_assets import save_config, vision_file_for
 from hyperflux.desktop.update_bar import UpdateBar
+from hyperflux.desktop.vision import VisionInstaller
 from hyperflux.search.bridge import load_or_create_token
 from hyperflux.paths import (
     DESKTOP_LOGO,
@@ -56,6 +65,7 @@ class HyperFluxWindow(QMainWindow):
         self._restarting_kobold = False
         self._kobold_alive = False
         self.local_models = None
+        self.vision = None
         self.setWindowTitle("HyperFlux AI")
         self.resize(1360, 900)
         self.setMinimumSize(900, 620)
@@ -76,6 +86,8 @@ class HyperFluxWindow(QMainWindow):
         self.profile.setPersistentCookiesPolicy(
             QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies
         )
+        # Qt drops downloads unless someone accepts them (used by "Export chat").
+        self.profile.downloadRequested.connect(self._save_download)
 
         self.page = QWebEnginePage(self.profile, self)
         apply_page_settings(self.page)
@@ -143,6 +155,21 @@ class HyperFluxWindow(QMainWindow):
             )
             self._start_local_services()
 
+    def _save_download(self, request):
+        """Ask where to save a file the page offers (an exported chat)."""
+        documents = Path.home() / "Documents"
+        suggested = documents / (request.downloadFileName() or "HyperFlux chat.md")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save chat", str(suggested), "Markdown (*.md);;Text (*.txt);;All files (*)"
+        )
+        if not path:
+            request.cancel()
+            return
+        target = Path(path)
+        request.setDownloadDirectory(str(target.parent))
+        request.setDownloadFileName(target.name)
+        request.accept()
+
     def _open_external_link(self, request):
         QDesktopServices.openUrl(request.requestedUrl())
 
@@ -171,6 +198,12 @@ class HyperFluxWindow(QMainWindow):
             parent=self,
         )
         self.local_models.switch_requested.connect(self._switch_model)
+        self.vision = VisionInstaller(
+            model_path=lambda: self.runtime_config["model_path"],
+            can_restart=lambda: self._kobold_process is not None,
+            parent=self,
+        )
+        self.vision.restart_requested.connect(self._restart_kobold)
 
         self._search_thread = threading.Thread(
             target=self._run_search_bridge,
@@ -192,10 +225,11 @@ class HyperFluxWindow(QMainWindow):
         self._kobold_process.errorOccurred.connect(self._kobold_error)
         self._kobold_process.finished.connect(self._kobold_finished)
         self._kobold_alive = True
-        self._kobold_process.start(
-            executable,
-            ["--model", model, "--port", "5001", "--skiplaunch"],
-        )
+        arguments = ["--model", model, "--port", "5001", "--skiplaunch"]
+        vision_file = vision_file_for(model)  # image input, once its file is downloaded
+        if vision_file is not None:
+            arguments += ["--mmproj", str(vision_file)]
+        self._kobold_process.start(executable, arguments)
         if self._kobold_process.state() == QProcess.ProcessState.NotRunning:
             self._kobold_alive = False
 
@@ -224,6 +258,19 @@ class HyperFluxWindow(QMainWindow):
         if failed:
             self.runtime_config = {**self.runtime_config, "model_path": previous}
         self.local_models.finished(model_path, failed=failed, previous_path=previous)
+
+    def _restart_kobold(self):
+        """Reload the same model (e.g. so KoboldCpp picks up the new vision file)."""
+        if self._kobold_process is None:
+            return
+        self._restarting_kobold = True
+        old_process = self._kobold_process
+        try:
+            self._stop_kobold()
+        finally:
+            self._restarting_kobold = False
+        old_process.deleteLater()
+        self._start_kobold()
 
     def _kobold_error(self, error):
         # Crashes are reported once, by _kobold_finished.
@@ -275,6 +322,7 @@ class HyperFluxWindow(QMainWindow):
                 Config.SEARCH_BRIDGE_PORT,
                 Config.SEARCH_RESULT_COUNT,
                 model_manager=self.local_models,
+                vision_manager=self.vision,
             )
             self._search_server = server
             server.serve_forever()

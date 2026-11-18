@@ -65,6 +65,90 @@ DEFAULT_GEMMA = "e2b"
 GEMMA_MODEL = GEMMA_MODELS[DEFAULT_GEMMA]
 
 
+def _pinned_vision(size_name, commit, size, sha256):
+    repo = f"lmstudio-community/gemma-4-{size_name}-it-GGUF"
+    filename = f"mmproj-gemma-4-{size_name}-it-BF16.gguf"
+    return {
+        "label": f"Gemma 4 {size_name} vision",
+        "filename": filename,
+        "url": f"https://huggingface.co/{repo}/resolve/{commit}/{filename}",
+        "size": size,
+        "sha256": sha256,
+        "source_page": f"https://huggingface.co/{repo}",
+        **_GEMMA_LICENSE,
+    }
+
+
+# Image input: each Gemma 4 model needs its own vision projector ("mmproj") file,
+# loaded by KoboldCpp with --mmproj. Same repository commits as the models above.
+VISION_FILES = {
+    "e2b": _pinned_vision("E2B", "eed445ccfb8aef2e279df1a97e133baf06e443b4", 986_833_248,
+                          "04125f8e2a1135824e48064c32157356704e6681a9f3af669af321a3c70c39d7"),
+    "e4b": _pinned_vision("E4B", "99210a71094c6aa8559f764e0cadedd7d89de94d", 991_551_840,
+                          "bdfc4935857658dfdc8d1adebfa3897c2fec8b3323410f4f73ade36d6efa02be"),
+}
+
+
+def is_vision_file(path):
+    """Vision projectors are GGUF files too, but never a chat model."""
+    return Path(path).name.casefold().startswith("mmproj")
+
+
+def model_family(model_path):
+    """'e2b' or 'e4b' for a Gemma 4 model file (by name, pinned size or header), else None."""
+    if not model_path:
+        return None
+    path = Path(model_path)
+    for key, info in GEMMA_MODELS.items():
+        if path.name.casefold() == info["filename"].casefold():
+            return key
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    for key, info in GEMMA_MODELS.items():
+        if size == info["size"]:
+            return key
+    name = (gguf_model_name(path) or "") + " " + path.stem
+    for key in GEMMA_MODELS:
+        if re.search(rf"(?<![a-z0-9]){key}(?![a-z0-9])", name, re.IGNORECASE):
+            return key
+    return None
+
+
+def vision_download_path(family):
+    return APP_DATA / "models" / VISION_FILES[family]["filename"]
+
+
+def vision_file_for(model_path):
+    """The vision file that matches this model, if it is on this PC (else None)."""
+    family = model_family(model_path)
+    if family is None:
+        return None
+    name = VISION_FILES[family]["filename"]
+    for candidate in (vision_download_path(family), Path(model_path).parent / name):
+        if candidate.is_file() and candidate.stat().st_size == VISION_FILES[family]["size"]:
+            return candidate
+    return None
+
+
+def download_vision_file(model_path, progress, log, is_cancelled):
+    """Download (or reuse) the vision file for this model; returns its path."""
+    family = model_family(model_path)
+    if family is None:
+        raise OSError("Image input needs a Gemma 4 E2B or E4B model.")
+    existing = vision_file_for(model_path)
+    if existing is not None:
+        return existing
+    info = VISION_FILES[family]
+    destination = vision_download_path(family)
+    if destination.exists():
+        destination.unlink()  # our own earlier file with the wrong size
+    log(f"Downloading {info['label']} ({info['size'] / 1e9:.1f} GB) from Hugging Face...")
+    download(info["url"], destination, info["size"], info["sha256"], progress, log, is_cancelled)
+    return destination
+
+
 def total_ram_gb():
     """This PC's installed memory in GB, or None if Windows doesn't say."""
     try:
@@ -148,7 +232,7 @@ def find_gguf_models():
         if not directory.is_dir():
             continue
         for path in directory.glob("*.gguf"):
-            if path.is_file() and is_gguf(path):
+            if path.is_file() and is_gguf(path) and not is_vision_file(path):
                 candidates[str(path.resolve()).casefold()] = path.resolve()
     preferred_names = {"model.gguf": 0}
     return sorted(
@@ -236,7 +320,7 @@ def describe_local_models(active_path):
     # Models kept next to the current one (e.g. a second model in the same folder).
     if active_path and Path(active_path).parent.is_dir():
         for path in Path(active_path).parent.glob("*.gguf"):
-            if path.is_file() and is_gguf(path):
+            if path.is_file() and is_gguf(path) and not is_vision_file(path):
                 paths.setdefault(str(path.resolve()).casefold(), path.resolve())
     active_key = str(Path(active_path).resolve()).casefold() if active_path else ""
     models = []

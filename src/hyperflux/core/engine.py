@@ -11,12 +11,19 @@ import requests
 from rich.live import Live
 from rich.text import Text
 
+from hyperflux import paths
 from hyperflux.config import Config
 from hyperflux.core import kobold, routing
 from hyperflux.core.commands import handle_runtime_command
 from hyperflux.core.formatting import repair_collapsed_tables
 from hyperflux.core.math_solver import SafeMathSolver
-from hyperflux.core.models import DEFAULT_MODEL, reply_budget
+from hyperflux.core.models import (
+    DEFAULT_MODEL,
+    DEFAULT_PERSONA,
+    MAX_CUSTOM_INSTRUCTIONS,
+    PERSONAS,
+    reply_budget,
+)
 from hyperflux.core.prompts import (
     MATH_INSTRUCTIONS,
     build_capabilities,
@@ -59,6 +66,10 @@ class HyperFluxEngine:
         self.thinking_enabled = False
         # Flash 1 / Apex 1 / Horizon 1; switched with /model.
         self.model_id = DEFAULT_MODEL
+        # Set with /persona and /instructions; remembered between sessions.
+        self.persona = DEFAULT_PERSONA
+        self.custom_instructions = ""
+        self._load_terminal_settings()
         self._load_model_name()
         self._load_local_brain()
 
@@ -87,6 +98,32 @@ class HyperFluxEngine:
         server_context = kobold.fetch_max_context()
         if server_context:
             self.max_context_length = min(self.max_context_length, server_context)
+
+    def _load_terminal_settings(self):
+        try:
+            saved = json.loads(paths.TERMINAL_SETTINGS_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        if not isinstance(saved, dict):
+            return
+        if saved.get("persona") in PERSONAS:
+            self.persona = saved["persona"]
+        if isinstance(saved.get("custom_instructions"), str):
+            self.custom_instructions = saved["custom_instructions"][:MAX_CUSTOM_INSTRUCTIONS]
+
+    def save_terminal_settings(self):
+        """Remember the persona and custom instructions. Returns False if it couldn't."""
+        target = paths.TERMINAL_SETTINGS_PATH
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            temporary = target.with_name(target.name + ".tmp")
+            temporary.write_text(json.dumps({"persona": self.persona,
+                                             "custom_instructions": self.custom_instructions}, indent=2),
+                                 encoding="utf-8")
+            temporary.replace(target)
+            return True
+        except OSError:
+            return False
 
     def _load_local_brain(self):
         if Config.BRAIN_PATH.exists():
@@ -145,7 +182,7 @@ class HyperFluxEngine:
     ):
         """Generate a reply. token_callback receives the answer so far (never the thinking)."""
         system_instruction = self.system_instruction or build_system_instruction(
-            self.get_capabilities(), self.model_id
+            self.get_capabilities(), self.model_id, self.persona, self.custom_instructions
         )
         thinking_enabled = wants_thinking(user_prompt, self.thinking_enabled, self.model_id)
         system_instruction += "\n\n" + build_thinking_instruction(

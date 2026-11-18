@@ -1,11 +1,14 @@
-"""Slash commands that change or report engine state: /sys, /temp, /length, /read."""
+"""Slash commands that change or report engine state: /sys, /temp, /length, /read,
+/persona, /instructions, /export."""
 
 import math
 import re
+from datetime import datetime
 from pathlib import Path
 
+from hyperflux import paths
 from hyperflux.config import Config
-from hyperflux.core.models import MODELS, get_model
+from hyperflux.core.models import MAX_CUSTOM_INSTRUCTIONS, MODELS, PERSONAS, get_model
 from hyperflux.core.prompts import build_file_prompt
 
 
@@ -33,9 +36,67 @@ def handle_runtime_command(engine, user_input: str, quiet=False, token_callback=
     if length_match:
         return _set_max_length(engine, (length_match.group(1) or "").strip())
 
+    persona_match = re.fullmatch(r"/persona(?:\s+(\S+))?", user_input.strip(), re.IGNORECASE)
+    if persona_match:
+        return _set_persona(engine, (persona_match.group(1) or "").casefold())
+    instructions_match = re.fullmatch(r"/instructions(?:\s+(.*))?", user_input.strip(), re.IGNORECASE | re.DOTALL)
+    if instructions_match:
+        return _set_instructions(engine, (instructions_match.group(1) or "").strip())
+    if lowered == "/export":
+        return export_chat(engine)
+
     if lowered == "/read" or lowered.startswith("/read "):
         return read_workspace_file(engine, user_input, quiet, token_callback)
     return None
+
+
+def _set_persona(engine, value):
+    if value:
+        if value not in PERSONAS:
+            return f"Unknown persona. Usage: /persona {' | '.join(PERSONAS)}"
+        engine.persona = value
+        saved = engine.save_terminal_settings()
+        note = "" if saved else " (It couldn't be saved, so it lasts until you close the app.)"
+        return f"Persona set to **{PERSONAS[value]['name']}**: {PERSONAS[value]['description']}{note}"
+    lines = [f"Active persona: **{PERSONAS[engine.persona]['name']}**.", ""]
+    lines += [f"- `/persona {key}`: {p['description']}" for key, p in PERSONAS.items()]
+    return "\n".join(lines)
+
+
+def _set_instructions(engine, value):
+    if not value:
+        if not engine.custom_instructions:
+            return ("No custom instructions are set. Add some with `/instructions <text>`, "
+                    "for example: `/instructions I'm a student in Malaysia; keep answers simple`.")
+        return (f"### Your custom instructions\n\n{engine.custom_instructions}\n\n"
+                "Change them with `/instructions <text>`, or remove them with `/instructions clear`.")
+    if value.casefold() == "clear":
+        engine.custom_instructions = ""
+        engine.save_terminal_settings()
+        return "Custom instructions removed."
+    engine.custom_instructions = value[:MAX_CUSTOM_INSTRUCTIONS]
+    saved = engine.save_terminal_settings()
+    cut = " (shortened to the first 1,500 characters)" if len(value) > MAX_CUSTOM_INSTRUCTIONS else ""
+    note = "" if saved else " They couldn't be saved, so they last until you close the app."
+    return f"Custom instructions saved{cut}. HyperFlux will follow them in every answer.{note}"
+
+
+def export_chat(engine, folder=None, now=None):
+    """Save this session's conversation as a Markdown file. Returns a reply."""
+    if not engine.chat_history:
+        return "There is nothing to export yet: this session has no messages."
+    now = now or datetime.now()
+    folder = Path(folder or paths.EXPORT_DIR)
+    lines = [f"# HyperFlux chat", "", f"Exported {now:%A, %d %B %Y at %H:%M}", ""]
+    for exchange in engine.chat_history:
+        lines += ["## You", "", exchange["user"], "", "## HyperFlux", "", exchange["assistant"], ""]
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / f"HyperFlux chat {now:%Y-%m-%d %H%M%S}.md"
+        target.write_text("\n".join(lines), encoding="utf-8")
+    except OSError as error:
+        return f"Could not export the chat: {error}"
+    return f"Chat exported to `{target}`."
 
 
 def _system_status(engine):
@@ -53,6 +114,8 @@ def _system_status(engine):
     return (
         "### HyperFlux system status\n\n"
         f"- **HyperFlux model:** {get_model(engine.model_id)['name']}\n"
+        f"- **Persona:** {PERSONAS[engine.persona]['name']}\n"
+        f"- **Custom instructions:** {'set' if engine.custom_instructions else 'none'}\n"
         f"- **Loaded model file:** {engine.model_name}\n"
         f"- **Context usage:** {context_usage}\n"
         f"- **Last generation speed:** {generation_speed}\n"

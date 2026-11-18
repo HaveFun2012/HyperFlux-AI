@@ -53,6 +53,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
     kobold_log_path = KOBOLD_LOG_PATH
     log_token = ""
     model_manager = None  # desktop app only: lists and switches local models
+    vision_manager = None  # desktop app only: downloads the image-input file
 
     def _host_is_allowed(self):
         return bool(_ALLOWED_HOSTS.fullmatch(self.headers.get("Host", "")))
@@ -106,7 +107,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         if route == "/health":
             self._send_json(200, {"status": "ok", "service": "HyperFlux search"})
             return
-        if route not in ("/kobold-logs", "/local-models"):
+        if route not in ("/kobold-logs", "/local-models", "/vision"):
             self._send_json(404, {"error": "Not found."})
             return
         if not self._origin_is_allowed():
@@ -114,6 +115,12 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         if not self._log_token_is_valid():
             self._send_json(403, {"error": "Live logs are only available in the HyperFlux desktop app."})
+            return
+        if route == "/vision":
+            if self.vision_manager is None:
+                self._send_json(200, {"supported": False, "installed": False, "downloading": False})
+            else:
+                self._send_json(200, self.vision_manager.describe())
             return
         if route == "/local-models":
             if self.model_manager is None:
@@ -157,7 +164,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(403, {"error": "Host not allowed."})
             return
         route = urlsplit(self.path).path
-        if route not in ("/search", "/local-models/switch"):
+        if route not in ("/search", "/local-models/switch", "/vision/install"):
             self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
@@ -167,6 +174,14 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         if route == "/local-models/switch":
             self._switch_model()
+            return
+        if route == "/vision/install":
+            self._discard_body()
+            if not self._log_token_is_valid() or self.vision_manager is None:
+                self._send_json(403, {"error": "Image input can only be set up in the HyperFlux desktop app."})
+                return
+            accepted, message = self.vision_manager.request_install()
+            self._send_json(202 if accepted else 409, {"accepted": accepted, "message": message})
             return
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
@@ -223,7 +238,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
 
 
 def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, log_token=None,
-                         model_manager=None):
+                         model_manager=None, vision_manager=None):
     handler = type(
         "HyperFluxSearchBridgeHandler",
         (_SearchBridgeHandler,),
@@ -232,6 +247,7 @@ def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, lo
             "result_count": result_count,
             "log_token": load_or_create_token() if log_token is None else log_token,
             "model_manager": model_manager,
+            "vision_manager": vision_manager,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)

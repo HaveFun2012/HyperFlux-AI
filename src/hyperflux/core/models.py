@@ -155,6 +155,63 @@ MODELS = {
 }
 DEFAULT_MODEL = "apex"
 
+# Personas change the tone on top of the active model's rules. Keep in step with
+# PERSONAS in HyperFlux Web.html.
+PERSONAS = {
+    "default": {"name": "Default", "description": "HyperFlux's normal style.", "style": []},
+    "tutor": {
+        "name": "Tutor",
+        "description": "Teaches step by step and checks you understood.",
+        "style": [
+            "Persona: a patient tutor. Explain ideas step by step in plain words, with a small "
+            "example. When it helps, end with one short question that checks understanding.",
+            "For homework-style questions, show how to reach the answer rather than only stating it.",
+        ],
+    },
+    "coder": {
+        "name": "Coder",
+        "description": "Code first, short practical explanations.",
+        "style": [
+            "Persona: a senior software engineer. Lead with working code, keep explanations short "
+            "and practical, and point out bugs, edge cases and security problems. Prefer the "
+            "standard library and simple designs.",
+        ],
+    },
+    "concise": {
+        "name": "Concise",
+        "description": "As short as possible.",
+        "style": [
+            "Persona: concise. Answer in one or two sentences unless the user asks for more. Skip "
+            "examples and background unless the answer would be wrong without them.",
+        ],
+    },
+    "friendly": {
+        "name": "Friendly",
+        "description": "Casual and encouraging.",
+        "style": [
+            "Persona: friendly. Use a casual, encouraging tone, like a friend who knows the "
+            "subject. Stay accurate; no emoji unless the user uses them.",
+        ],
+    },
+}
+DEFAULT_PERSONA = "default"
+MAX_CUSTOM_INSTRUCTIONS = 1500
+
+
+def persona_rules(persona_id):
+    return PERSONAS.get(persona_id, PERSONAS[DEFAULT_PERSONA])["style"]
+
+
+def custom_instructions_block(text):
+    """The user's own instructions as system-prompt text, or ''."""
+    text = str(text or "").strip()[:MAX_CUSTOM_INSTRUCTIONS]
+    if not text:
+        return ""
+    return (
+        "The user's custom instructions (about them and how they like answers; follow them "
+        "unless they conflict with the rules above):\n" + text
+    )
+
 
 def get_model(model_id):
     return MODELS.get(model_id, MODELS[DEFAULT_MODEL])

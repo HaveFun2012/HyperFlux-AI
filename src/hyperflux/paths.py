@@ -27,3 +27,7 @@ def user_data_directory():
 KOBOLD_LOG_PATH = user_data_directory() / "logs" / "kobold.log"
 # Secret that the desktop page must send to read KoboldCpp logs from the search bridge.
 BRIDGE_TOKEN_PATH = user_data_directory() / "bridge_token"
+# The terminal app's persona and custom instructions (the desktop app keeps its own).
+TERMINAL_SETTINGS_PATH = user_data_directory() / "terminal_settings.json"
+# Chats saved with /export in the terminal app.
+EXPORT_DIR = Path.home() / "Documents" / "HyperFlux exports"
