@@ -4,7 +4,7 @@ import json
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, QUrl, Signal
+from PySide6.QtCore import QProcess, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWebEngineCore import (
     QWebEnginePage,
@@ -66,6 +66,7 @@ class HyperFluxWindow(QMainWindow):
         self._kobold_alive = False
         self.local_models = None
         self.vision = None
+        self._check_updates = check_updates
         self.setWindowTitle("HyperFlux AI")
         self.resize(1360, 900)
         self.setMinimumSize(900, 620)
@@ -139,6 +140,10 @@ class HyperFluxWindow(QMainWindow):
         self.setCentralWidget(central)
         if check_updates:
             self.update_bar.check_in_background()
+            # Left open for days, it still notices new releases (each check is throttled).
+            self._update_timer = QTimer(self)
+            self._update_timer.timeout.connect(self.update_bar.check_in_background)
+            self._update_timer.start(30 * 60 * 1000)
 
         html_path = WEB_INTERFACE
         if not html_path.is_file():
@@ -323,6 +328,8 @@ class HyperFluxWindow(QMainWindow):
                 Config.SEARCH_RESULT_COUNT,
                 model_manager=self.local_models,
                 vision_manager=self.vision,
+                # The page asks about updates (popup, then a sidebar card) through the bridge.
+                update_manager=self.update_bar if self._check_updates else None,
             )
             self._search_server = server
             server.serve_forever()

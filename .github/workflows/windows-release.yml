@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # to create the draft release; nothing is published automatically
 
 jobs:
   windows:
@@ -24,6 +24,16 @@ jobs:
           $version = (Select-String -Path src\hyperflux\version.py -Pattern '__version__ = "([^"]+)"').Matches[0].Groups[1].Value
           if ("v$version" -ne "${{ github.ref_name }}") {
             throw "Tag ${{ github.ref_name }} does not match src/hyperflux/version.py ($version). Update __version__ first."
+          }
+
+      # The in-app update popup shows these notes, so every release must have them.
+      - name: Check this version has patch notes
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $notes = "src/packaging/release-notes/versions/${{ github.ref_name }}.md"
+          if (-not (Test-Path $notes) -or -not (Get-Content $notes -Raw).Trim()) {
+            throw "Write the patch notes for this version in $notes first."
           }
 
       - name: Set up Python
@@ -126,3 +136,21 @@ jobs:
             src/dist/RELEASE-NOTES.md
           if-no-files-found: error
           retention-days: 30
+
+      # A draft is invisible to the app. Review it on GitHub and click Publish:
+      # only then do installed copies of HyperFlux offer the update.
+      - name: Create a draft GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $files = @("src/dist/HyperFlux-Setup.exe", "src/dist/HyperFlux-Setup.exe.sha256")
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @files --clobber
+          } else {
+            gh release create $tag @files --draft --title "HyperFlux $tag" --notes-file src/dist/RELEASE-NOTES.md
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Creating the draft release failed." }

@@ -30,6 +30,7 @@ Riddles and real-world "what happens if" questions think automatically even with
 - **Commands:** type `/` to see them: `/help`, `/search`, `/read`, `/persona`, `/export`, `/sys`, `/temp`, `/length`.
 - **Looks:** six colour themes in Dark, Light or Match system, a custom accent colour and text size.
 - **Model picker:** switch between the GGUF models on this PC without restarting.
+- **Updates:** the installed app checks GitHub at startup and every 6 hours. When a new release is out, a popup shows its patch notes and the files that changed since your version, and asks before installing. **Later** keeps an **Update available** card in the sidebar, even after a restart, until you update or skip that version. Every installer is checked against its SHA-256 before it runs.
 
 **In the terminal app** (`src\scripts\Run_HyperFlux_Terminal.bat`): the same models and answer style, plus `/model`, `/think`, `/thinking`, `/persona`, `/instructions <text>|clear` and `/export`. The persona and custom instructions are remembered between sessions. Pictures, read aloud and chat search are desktop-only.
 
@@ -47,9 +48,11 @@ src/
                            vision.py downloads the image-input file and reloads KoboldCpp
   web/                     HyperFlux Web.html and logo_hyperflux/ images
   data/                    hf_brain.json (local canned answers)
-  scripts/                 setup_assets.ps1, Run_HyperFlux_Terminal.bat, Start_HyperFlux_Server.bat
+  scripts/                 setup_assets.ps1, Run_HyperFlux_Terminal.bat, Start_HyperFlux_Server.bat,
+                           Publish_Update.bat (tags a release for GitHub to build)
   tools/                   dataset_builder.py (regenerates data/hf_brain.json)
   packaging/               PyInstaller spec, icon builder, Inno Setup installer, release notes
+                           (release-notes/versions/v<version>.md: each version's patch notes)
   tests/                   Unit tests
 ```
 
@@ -147,17 +150,29 @@ The result is `src\dist\HyperFlux-Setup.exe`, plus its `.sha256` and
 
 ### Releasing a new version
 
-1. Set `__version__` in `src\hyperflux\version.py` (for example `"1.1.0"`).
-2. Commit, then tag and push it: `git tag v1.1.0` and `git push origin v1.1.0`.
-   The workflow refuses to build if the tag and `version.py` differ.
-3. Publish a GitHub release for the tag with `HyperFlux-Setup.exe` attached.
-   Installed copies of HyperFlux will then offer the update.
+Installed copies of HyperFlux only ever update to a **published** GitHub release.
+Commits and drafts are never offered, so unfinished work doesn't reach anyone. The
+installed app is compiled, so it can't take changed files one by one: each
+update is a complete, verified installer.
 
-The setup workflow runs on a `v*` tag and stores the installer, its SHA-256,
-and generated release notes as a GitHub Actions artifact. It does not create
-or publish a GitHub Release. Review and manually publish the artifact only
-after the packaged smoke test, measured artifact size, release notes, and
-legal notice checks have passed.
+1. Write the patch notes for the version in
+   `src\packaging\release-notes\versions\v<version>.md`, for example `v1.1.0.md`.
+   The update popup shows them, so write them for users. When the change is
+   important, also update the **Features** list above and the "New in this update"
+   notes on the home page (`releaseNotes` in `src\web\HyperFlux Web.html`).
+2. Commit everything, then run `src\scripts\Publish_Update.bat`. It asks for the
+   new version, checks the patch notes exist, runs the tests, sets
+   `__version__`, commits, tags `v<version>` and pushes.
+3. GitHub Actions builds and smoke-tests the installer (about 10 minutes) and
+   creates a **draft** release with the installer, its SHA-256 and the release
+   notes. It refuses to build if the tag and `version.py` differ or the version
+   has no patch notes.
+4. Open the draft on GitHub, check it, and click **Publish**. Installed copies
+   offer the update within about 6 hours, or at their next start.
+
+Publish only after the packaged smoke test, measured installer size, release notes
+and legal notice checks have passed. The installer also stays attached to the
+workflow run as an artifact for 30 days.
 
 ### Download and disk-space estimate
 

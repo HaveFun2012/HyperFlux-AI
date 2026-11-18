@@ -54,6 +54,74 @@ class UpdaterTests(unittest.TestCase):
         with patch("hyperflux.desktop.updater.requests.get", side_effect=list(responses)):
             return updater.check_for_update(current=current, **kwargs)
 
+    def test_offer_has_patch_notes_and_changed_files_and_is_remembered(self):
+        body = "# HyperFlux v1.2.0\n\nIntro.\n\n## What's new\n\n- **Pictures.** You can attach them.\n\n## Installation\n\nRun it."
+        compare = {"files": [{"filename": "src/web/HyperFlux Web.html", "status": "modified"},
+                             {"filename": "src/hyperflux/desktop/vision.py", "status": "added"}],
+                   "commits": [{"commit": {"message": "Add pictures\n\nDetails"}}]}
+        info = self._check(_Response(payload=_release(body=body)), _Response(payload=compare))
+        self.assertEqual(info["notes"], "- **Pictures.** You can attach them.")
+        self.assertEqual(info["changes"]["total"], 2)
+        self.assertEqual(info["changes"]["files"][1], {"name": "src/hyperflux/desktop/vision.py", "status": "added"})
+        self.assertEqual(info["changes"]["commits"], ["Add pictures"])
+        # "Later": offered again on the next launch, even offline, until installed or skipped.
+        self.assertEqual(updater.pending_update(current="1.0.0")["version"], "1.2.0")
+        self.assertIsNone(updater.pending_update(current="1.2.0"))  # installed
+        updater.skip_version("1.2.0")
+        self.assertIsNone(updater.pending_update(current="1.0.0"))
+
+    def test_missing_compare_never_blocks_the_update(self):
+        info = self._check(_Response(payload=_release()), _Response(status=404))
+        self.assertIsNotNone(info)
+        self.assertIsNone(info["changes"])
+
+    def test_popup_is_shown_once_per_version(self):
+        self.assertTrue(updater.should_prompt("1.2.0"))
+        updater.mark_prompted("1.2.0")
+        self.assertFalse(updater.should_prompt("1.2.0"))
+        self.assertTrue(updater.should_prompt("1.3.0"))
+
+    def test_notes_without_a_whats_new_section_are_used_whole(self):
+        self.assertEqual(updater.whats_new("Just a fix."), "Just a fix.")
+        self.assertEqual(updater.whats_new(None), "")
+
+    def test_release_notes_start_with_this_versions_patch_notes(self):
+        from importlib import util
+        path = Path(__file__).resolve().parents[1] / "packaging" / "release-notes" / "generate.py"
+        spec = util.spec_from_file_location("generate_notes", path)
+        generate = util.module_from_spec(spec)
+        spec.loader.exec_module(generate)
+        notes = generate.build_notes("v1.1.0")
+        self.assertIn("## What's new\n\n- **Show HyperFlux a picture.**", notes)
+        self.assertLess(notes.index("## What's new"), notes.index("## Highlights"))
+        self.assertTrue(updater.whats_new(notes).startswith("- **Show HyperFlux a picture.**"))
+
+    def test_bridge_update_routes_need_the_desktop_token(self):
+        import threading
+        import requests
+        from hyperflux.search.bridge import create_search_bridge
+
+        class FakeUpdates:
+            calls = []
+            def describe(self): return {"available": True, "version": "1.2.0", "prompt": True}
+            def request_install(self): FakeUpdates.calls.append("install"); return True, "ok"
+            def skip(self): FakeUpdates.calls.append("skip"); return True
+            def mark_prompted(self): FakeUpdates.calls.append("prompted"); return True
+
+        server = create_search_bridge(None, port=0, log_token="tok", update_manager=FakeUpdates())
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            self.assertEqual(requests.get(base + "/update", timeout=5).status_code, 403)
+            self.assertEqual(requests.get(base + "/update?token=tok", timeout=5).json()["version"], "1.2.0")
+            self.assertEqual(requests.post(base + "/update/install", timeout=5).status_code, 403)
+            for action in ("prompted", "install", "skip"):
+                self.assertLess(requests.post(f"{base}/update/{action}?token=tok", timeout=5).status_code, 300)
+            self.assertEqual(FakeUpdates.calls, ["prompted", "install", "skip"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_version_comparison(self):
         self.assertTrue(updater.is_newer("v1.0.1", "1.0.0"))
         self.assertTrue(updater.is_newer("1.10.0", "1.9.9"))

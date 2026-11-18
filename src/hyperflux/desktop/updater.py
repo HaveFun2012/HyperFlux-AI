@@ -5,7 +5,12 @@ Kept free of Qt so it can be tested without a GUI. Rules:
   * The installer must come from GitHub over HTTPS and match a SHA-256 published
     with the release (GitHub's asset digest or the attached .sha256 file).
     Without a checksum, the update is refused.
-  * Checks happen at most once a day, and the user can skip a version.
+  * Checks happen at startup and at most every 6 hours, and the user can skip a version.
+  * A found update is remembered, so "Later" keeps offering it (in the sidebar)
+    until it is installed or skipped, even with no internet.
+  * The offer shows the release's patch notes and which files changed since the
+    installed version (GitHub's compare API). The installed app is compiled, so
+    files are never copied in one by one: every update is a whole, verified installer.
 """
 
 import json
@@ -21,7 +26,9 @@ from hyperflux.desktop import runtime_assets
 from hyperflux.version import GITHUB_REPO, __version__
 
 INSTALLER_NAME = "HyperFlux-Setup.exe"
-CHECK_INTERVAL_SECONDS = 24 * 60 * 60
+CHECK_INTERVAL_SECONDS = 6 * 60 * 60
+MAX_NOTES_CHARS = 6000
+MAX_LISTED_FILES = 60
 _HEADERS = {"Accept": "application/vnd.github+json", "User-Agent": f"HyperFlux/{__version__}"}
 
 
@@ -121,15 +128,74 @@ def check_for_update(current=__version__, ignore_skipped=False):
         sha256 = _published_sha256(release, installer)
         if not isinstance(size, int) or size <= 0 or not sha256:
             return None  # can't verify it, so don't offer it
-        return {
+        info = {
             "version": version,
             "url": installer["browser_download_url"],
             "size": size,
             "sha256": sha256,
             "notes_url": release.get("html_url") or f"https://github.com/{GITHUB_REPO}/releases/latest",
+            "notes": whats_new(release.get("body")),
+            "changes": changed_files(current, version),
         }
+        remember_available(info)
+        return info
     except (requests.RequestException, ValueError, KeyError, TypeError, AttributeError):
         return None
+
+
+def whats_new(body):
+    """The release's "What's new" section (or the start of its notes), as Markdown."""
+    text = str(body or "").replace("\r\n", "\n").strip()
+    match = re.search(r"^##\s*What'?s new\s*\n(.*?)(?=^##\s|\Z)", text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+    text = (match.group(1) if match else text).strip()
+    return text[:MAX_NOTES_CHARS]
+
+
+def changed_files(current, version):
+    """{'total', 'files': [{'name', 'status'}], 'commits': [...]} between the two release
+    tags, read from GitHub. None if GitHub can't say (e.g. the old tag is missing)."""
+    try:
+        response = requests.get(
+            f"https://api.github.com/repos/{GITHUB_REPO}/compare/v{current}...v{version}",
+            headers=_HEADERS, timeout=(10, 30),
+        )
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        files = [{"name": str(f.get("filename", "")), "status": str(f.get("status", ""))}
+                 for f in data.get("files") or []]
+        commits = [str((c.get("commit") or {}).get("message", "")).split("\n", 1)[0][:120]
+                   for c in data.get("commits") or []]
+        return {"total": len(files), "files": files[:MAX_LISTED_FILES], "commits": commits[-20:]}
+    except Exception:  # only extra information: never let it stop an update
+        return None
+
+
+# ---- Remembering an offered update ("Later") ----------------------------------------------
+
+def remember_available(info):
+    save_state(available=info)
+
+
+def pending_update(current=__version__):
+    """The update found earlier that is still newer and not skipped, or None."""
+    state = load_state()
+    info = state.get("available")
+    if not isinstance(info, dict) or not is_newer(info.get("version"), current):
+        return None
+    if state.get("skipped_version") == info.get("version"):
+        return None
+    required = ("version", "url", "size", "sha256")
+    return info if all(key in info for key in required) and _is_github_https(info["url"]) else None
+
+
+def should_prompt(version):
+    """Ask with the popup once per new version; afterwards only the sidebar card shows."""
+    return load_state().get("prompted_version") != version
+
+
+def mark_prompted(version):
+    save_state(prompted_version=version)
 
 
 # ---- Downloading and installing -------------------------------------------------------

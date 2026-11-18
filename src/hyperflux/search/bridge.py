@@ -54,6 +54,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
     log_token = ""
     model_manager = None  # desktop app only: lists and switches local models
     vision_manager = None  # desktop app only: downloads the image-input file
+    update_manager = None  # installed desktop app only: offers and installs updates
 
     def _host_is_allowed(self):
         return bool(_ALLOWED_HOSTS.fullmatch(self.headers.get("Host", "")))
@@ -107,7 +108,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         if route == "/health":
             self._send_json(200, {"status": "ok", "service": "HyperFlux search"})
             return
-        if route not in ("/kobold-logs", "/local-models", "/vision"):
+        if route not in ("/kobold-logs", "/local-models", "/vision", "/update"):
             self._send_json(404, {"error": "Not found."})
             return
         if not self._origin_is_allowed():
@@ -115,6 +116,12 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         if not self._log_token_is_valid():
             self._send_json(403, {"error": "Live logs are only available in the HyperFlux desktop app."})
+            return
+        if route == "/update":
+            if self.update_manager is None:
+                self._send_json(200, {"available": False})
+            else:
+                self._send_json(200, self.update_manager.describe())
             return
         if route == "/vision":
             if self.vision_manager is None:
@@ -164,7 +171,8 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(403, {"error": "Host not allowed."})
             return
         route = urlsplit(self.path).path
-        if route not in ("/search", "/local-models/switch", "/vision/install"):
+        if route not in ("/search", "/local-models/switch", "/vision/install",
+                         "/update/install", "/update/skip", "/update/prompted"):
             self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
@@ -174,6 +182,19 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         if route == "/local-models/switch":
             self._switch_model()
+            return
+        if route.startswith("/update/"):
+            self._discard_body()
+            if not self._log_token_is_valid() or self.update_manager is None:
+                self._send_json(403, {"error": "Updates are only available in the installed HyperFlux app."})
+                return
+            if route == "/update/install":
+                accepted, message = self.update_manager.request_install()
+                self._send_json(202 if accepted else 409, {"accepted": accepted, "message": message})
+            elif route == "/update/skip":
+                self._send_json(200, {"skipped": self.update_manager.skip()})
+            else:
+                self._send_json(200, {"ok": self.update_manager.mark_prompted()})
             return
         if route == "/vision/install":
             self._discard_body()
@@ -238,7 +259,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
 
 
 def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, log_token=None,
-                         model_manager=None, vision_manager=None):
+                         model_manager=None, vision_manager=None, update_manager=None):
     handler = type(
         "HyperFluxSearchBridgeHandler",
         (_SearchBridgeHandler,),
@@ -248,6 +269,7 @@ def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, lo
             "log_token": load_or_create_token() if log_token is None else log_token,
             "model_manager": model_manager,
             "vision_manager": vision_manager,
+            "update_manager": update_manager,
         },
     )
     server = ThreadingHTTPServer((host, port), handler)

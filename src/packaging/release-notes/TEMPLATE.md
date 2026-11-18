@@ -20,11 +20,18 @@ bundled, but setup can download the recommended model for you.
 - **Long answers aren't cut off:** replies that hit the length limit continue
   automatically.
 - **Live web search** for current events, with sources.
+- **Pictures:** attach a photo or screenshot and ask about it, after a one-time
+  image-input download in Settings.
+- **Read aloud** with your Windows voices, **custom instructions** about you,
+  and **personas** (Tutor, Coder, Concise, Friendly).
+- **Your chats:** search them, and export any chat as Markdown.
+- **Command menu:** type `/` to see every command.
 - **Themes:** six colour themes, each in Dark, Light or Match system.
 - **Easy setup:** choose your own GGUF model or download the recommended
   Gemma 4 E2B; KoboldCpp is downloaded from its official release when needed.
-- **Automatic updates:** new versions are offered in the app and installed in
-  one click, verified by SHA-256.
+- **Updates that ask first:** new versions are offered with their patch notes
+  and the files that changed; **Later** keeps the offer in the sidebar. Every
+  installer is verified by SHA-256.
 - Chats and settings stay on your PC, in the per-user application data folder.
 
 ## Installation
@@ -40,7 +47,8 @@ Apache 2.0, SHA-256 verified).
 - Installer size: measured by the release workflow
 - Model: your own GGUF, or the optional Gemma 4 E2B Q4_K_M download (3.4 GB); not bundled.
 - KoboldCpp: downloaded from its official release only when needed
-- About 4.5 GB of free disk space for the app, model and KoboldCpp
+- About 4.5 GB of free disk space for the app, model and KoboldCpp, plus about
+  1 GB for the optional image input
 
 ## Known issues
 
