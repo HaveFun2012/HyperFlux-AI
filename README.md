@@ -2,6 +2,37 @@
 
 HyperFlux AI is a local Windows assistant built around a GGUF model served by KoboldCpp. Application code, assets, tests and build files are organized under `src\`; the root contains this README, the desktop startup launcher, and repository configuration.
 
+## Features
+
+**Models.** Three HyperFlux models run on the same local model and differ in speed, thinking and answer length:
+
+| Model | Thinking | Best for |
+| :--- | :--- | :--- |
+| Flash 1 | Never | Quick everyday questions |
+| Apex 1 (default) | **Think** button, off by default | Most tasks |
+| Horizon 1 | Always, in depth | Hard maths, code, analysis and planning |
+
+Riddles and real-world "what happens if" questions think automatically even with **Think** off.
+
+**Answer style.** Answers start with the point in the first sentence and match their length to the question: a simple question gets one to three sentences. They are written as plain prose, with lists or tables only where they help, and say "I'm not sure" when that is true. A wrong premise in the question is corrected politely. Apex 1's instructions include short example exchanges, because a small model copies examples better than it follows rules. Today's date is part of every prompt.
+
+**In the desktop app:**
+
+- **Pictures:** attach a photo or screenshot with the paperclip and ask about it. Turn this on once in **Settings → Image input**, which downloads the vision file for your Gemma 4 E2B or E4B model (about 1 GB).
+- **Read aloud:** a **Read aloud** button under every answer speaks it with the Windows voices; the voice is chosen in Settings.
+- **Custom instructions:** tell HyperFlux about yourself once (**Settings → Custom instructions**, up to 1,500 characters), and it is sent with every message.
+- **Personas:** Default, Tutor, Coder, Concise or Friendly change the tone (**Settings → Persona** or `/persona tutor`).
+- **Chats:** every chat is saved on this PC. The box above **Recent Chats** searches titles and message text, and the download icon on a chat (or `/export`) saves it as a Markdown file.
+- **Answers:** Copy and Retry on every answer, Edit on your last message, Stop while it writes. Long answers continue automatically instead of being cut off.
+- **Formatting:** LaTeX maths, tables and code blocks with Copy buttons.
+- **Web search:** questions about current events are searched automatically, with sources. `/search <question>` searches on demand.
+- **Files:** attach a text or code file for review (the first 3,000 characters are read).
+- **Commands:** type `/` to see them: `/help`, `/search`, `/read`, `/persona`, `/export`, `/sys`, `/temp`, `/length`.
+- **Looks:** six colour themes in Dark, Light or Match system, a custom accent colour and text size.
+- **Model picker:** switch between the GGUF models on this PC without restarting.
+
+**In the terminal app** (`src\scripts\Run_HyperFlux_Terminal.bat`): the same models and answer style, plus `/model`, `/think`, `/thinking`, `/persona`, `/instructions <text>|clear` and `/export`. The persona and custom instructions are remembered between sessions. Pictures, read aloud and chat search are desktop-only.
+
 ## Project layout
 
 ```text
@@ -13,6 +44,7 @@ src/
     search/                Web search providers, ranking, and the local search bridge (port 5002)
     terminal/              Rich terminal interface       (python -m hyperflux.terminal)
     desktop/               Qt desktop window + setup     (python -m hyperflux.desktop)
+                           vision.py downloads the image-input file and reloads KoboldCpp
   web/                     HyperFlux Web.html and logo_hyperflux/ images
   data/                    hf_brain.json (local canned answers)
   scripts/                 setup_assets.ps1, Run_HyperFlux_Terminal.bat, Start_HyperFlux_Server.bat
@@ -58,9 +90,10 @@ The setup script downloads the runtime and KoboldCpp, but not model weights. Ens
 - Search bridge API: `http://127.0.0.1:5002`
 - Desktop chat history, settings, and embedded-browser data are stored under `%LOCALAPPDATA%\HyperFlux`.
 - KoboldCpp output is written to `%LOCALAPPDATA%\HyperFlux\logs\kobold.log` and is available from the **Server logs** button beside the server status.
-- Normal model replies include a collapsed **Thinking summary** that can be opened or hidden; greetings and direct name questions skip it. The summary is a brief user-facing rationale, not private chain-of-thought.
-- The embedded desktop interface and the browser interface keep separate `localStorage` histories and settings.
-- The terminal and desktop app retain separate chat histories.
+- When a model thinks (Horizon 1, Apex 1 with **Think** on, or a riddle), its thinking streams live and then folds into a collapsed box above the answer. Greetings and direct name questions never think.
+- **Image input** uses a vision projector file (`mmproj-gemma-4-E2B-it-BF16.gguf` or `mmproj-gemma-4-E4B-it-BF16.gguf`, about 1 GB) saved to `%LOCALAPPDATA%\HyperFlux\models`. It is pinned to the same Hugging Face commits as the models and checked against a fixed SHA-256. When it is present, the desktop app starts KoboldCpp with `--mmproj`. Pictures are reduced to at most 1,024 pixels on their longest side before they are sent and saved; if chat storage fills up, the oldest pictures are removed first and the text is kept. Answers about pictures are slower, especially on GPUs with 4 GB or less.
+- The embedded desktop interface and the browser interface keep separate `localStorage` histories and settings, including custom instructions and persona.
+- The terminal and desktop app retain separate chat histories. The terminal's persona and custom instructions are stored in `%LOCALAPPDATA%\HyperFlux\terminal_settings.json`, and `/export` in the terminal writes to `Documents\HyperFlux exports`.
 
 The desktop app embeds the same HTML, styles, and JavaScript used by the browser interface through Qt WebEngine. The embedded interface stores its browser data in a desktop-specific profile and imports existing desktop chats and settings on first launch. Both interfaces communicate directly with KoboldCpp for generation and use the search bridge (`src\hyperflux\search\bridge.py`) for search. Start the local servers before using either client.
 
@@ -134,7 +167,7 @@ E2B Q4_K_M model is about **3.43 GB (3.19 GiB)** and is not included in releases
 KoboldCpp is fetched separately from its current official release; its size
 varies by release (the local checkout's existing copy is about 607 MiB). For
 a fresh install, reserve roughly **4.5 GB** for the installer, installed app,
-local model, and KoboldCpp.
+local model, and KoboldCpp, plus about **1 GB** if you turn on image input.
 
 See [LICENSES.md](./LICENSES.md) for the release-blocking third-party license
 review checklist and [TEMPLATE.md](./src/packaging/release-notes/TEMPLATE.md)
