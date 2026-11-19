@@ -125,7 +125,9 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         if route == "/vision":
             if self.vision_manager is None:
-                self._send_json(200, {"supported": False, "installed": False, "downloading": False})
+                # A bridge started outside the desktop app can't download or restart anything.
+                self._send_json(200, {"supported": False, "installed": False, "downloading": False,
+                                      "unavailable": True})
             else:
                 self._send_json(200, self.vision_manager.describe())
             return

@@ -17,6 +17,32 @@ SCRIPTS_DIR = RESOURCE_ROOT / "scripts"
 SERVER_LAUNCHER = SCRIPTS_DIR / "Start_HyperFlux_Server.bat"
 
 
+def documents_directory():
+    """The user's real Documents folder (OneDrive can move it away from ~/Documents)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class GUID(ctypes.Structure):
+                _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD),
+                            ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8)]
+
+            # FOLDERID_Documents {FDD39AD0-238F-46AF-ADB4-6C85480369C7}
+            folder_id = GUID(0xFDD39AD0, 0x238F, 0x46AF,
+                             (ctypes.c_ubyte * 8)(0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7))
+            found = ctypes.c_wchar_p()
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(folder_id), 0, None,
+                                                          ctypes.byref(found)) == 0:
+                try:
+                    return Path(found.value)
+                finally:
+                    ctypes.windll.ole32.CoTaskMemFree(found)
+        except (AttributeError, OSError, TypeError):
+            pass
+    return Path.home() / "Documents"
+
+
 def user_data_directory():
     """Per-user folder for settings, logs, and downloaded assets."""
     local_app_data = os.environ.get("LOCALAPPDATA")
@@ -30,4 +56,4 @@ BRIDGE_TOKEN_PATH = user_data_directory() / "bridge_token"
 # The terminal app's persona and custom instructions (the desktop app keeps its own).
 TERMINAL_SETTINGS_PATH = user_data_directory() / "terminal_settings.json"
 # Chats saved with /export in the terminal app.
-EXPORT_DIR = Path.home() / "Documents" / "HyperFlux exports"
+EXPORT_DIR = documents_directory() / "HyperFlux exports"

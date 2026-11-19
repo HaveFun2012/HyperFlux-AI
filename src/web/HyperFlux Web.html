@@ -1822,7 +1822,7 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
   // Gemma 4 treats <|think|> as permission, not an order, and sometimes skips
   // thinking even on Horizon. Opening the thought channel for it makes it think.
   var currentTurn =
-    '<|turn>user\n' + imagePlaceholder(attachment) + prompt + formatAttachmentContext(attachment) +
+    '<|turn>user\n' + imagePlaceholder(attachment) + prompt + formatAttachmentContext(attachment, true) +
     '<turn|>\n<|turn>model\n' + (thinkingExempt ? '' : THINK_PREFILL);
   // KoboldCpp keeps maxLength tokens free for the reply, so the prompt gets the rest.
   var promptTokens = Math.max(512, effectiveContextLength() - modelReplyBudget(modelId));
@@ -1846,9 +1846,10 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
   return systemTurn + history.reverse().join('') + currentTurn;
 }
 
-function formatAttachmentContext(attachment) {
+// isCurrent: the message being sent now (its picture goes in "images" instead).
+function formatAttachmentContext(attachment, isCurrent) {
   if (attachment && attachment.kind === 'image') {
-    return attachment.image ? '' : '\n\n[The user shared a picture here: ' + attachment.name + ']';
+    return isCurrent && attachment.image ? '' : '\n\n[The user shared a picture here: ' + attachment.name + ']';
   }
   if (!attachment || typeof attachment.content !== 'string') return '';
   var content = attachment.content;
@@ -2066,6 +2067,7 @@ function renderHistoryList() {
 function loadSession(id) {
   var sess = sessions.find(function(s) { return s.id === id; });
   if (!sess) return;
+  stopSpeech();
   currentSessionId = id;
   
   $('homeView').style.display = 'none';
@@ -2745,9 +2747,11 @@ async function refreshVisionSetup() {
   } else if (setup.installed) {
     status.textContent = setup.can_restart
       ? 'Downloaded. The model is reloading with image input; this takes a minute.'
-      : 'Downloaded. Restart HyperFlux to turn image input on.';
+      : 'Downloaded. Close any KoboldCpp window started outside HyperFlux, then restart HyperFlux to turn image input on.';
   } else if (!bridgeToken() || !visionSetup) {
     status.textContent = 'Image input can be set up in the HyperFlux desktop app.';
+  } else if (setup.unavailable) {
+    status.textContent = 'Image input can be set up when HyperFlux starts the server itself. Close other KoboldCpp or HyperFlux server windows, then restart HyperFlux.';
   } else if (!setup.supported) {
     status.textContent = 'Image input needs a Gemma 4 E2B or E4B model. Choose one from the model menu.';
   } else {
@@ -2984,6 +2988,7 @@ function slashMenuKey(event) {
 var HF = (function(){
   return {
     newChat: function(){ 
+      stopSpeech();
       currentSessionId = null;
       var f = $('feed'); if (f) { f.innerHTML = ''; f.classList.remove('vis'); }
       var h = $('homeView');
@@ -3202,6 +3207,7 @@ var HF = (function(){
         this.pickFile(readTask);
         return;
       }
+      hideSlashMenu();
       var localResponse = attachment ? null : executeLocalCommand(prompt.trim());
       if (localResponse !== null) {
         if ($('msgInp')) $('msgInp').value = '';

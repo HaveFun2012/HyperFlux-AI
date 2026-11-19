@@ -178,6 +178,8 @@ class HyperFluxSetupTests(unittest.TestCase):
             ):
                 runtime_assets.save_config(model, executable)
                 loaded = runtime_assets.load_config()
+            if loaded is None:
+                self.fail("Expected runtime config to load.")
             self.assertEqual(Path(loaded["model_path"]), model.resolve())
             self.assertEqual(Path(loaded["kobold_path"]), executable.resolve())
 
@@ -195,8 +197,9 @@ class HyperFluxSetupTests(unittest.TestCase):
             ):
                 runtime_assets.save_config(str(model), str(executable))
                 loaded = runtime_assets.load_config()
+            if loaded is None:
+                self.fail("Expected runtime config to load.")
             self.assertEqual(Path(loaded["model_path"]), model.resolve())
-
 
 
 class GemmaDownloadTests(unittest.TestCase):

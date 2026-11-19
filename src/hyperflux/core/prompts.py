@@ -11,8 +11,6 @@ from hyperflux.core.models import (
     DEFAULT_PERSONA,
     custom_instructions_block,
     persona_rules,
-    NO_THINKING_GUIDANCE,
-    THINKING_GUIDANCE,
     get_model,
     model_lineup,
     style_examples,

@@ -34,6 +34,7 @@ from hyperflux.paths import (
     DESKTOP_LOGO,
     KOBOLD_LOG_PATH,
     WEB_INTERFACE,
+    documents_directory,
     user_data_directory,
 )
 
@@ -162,8 +163,7 @@ class HyperFluxWindow(QMainWindow):
 
     def _save_download(self, request):
         """Ask where to save a file the page offers (an exported chat)."""
-        documents = Path.home() / "Documents"
-        suggested = documents / (request.downloadFileName() or "HyperFlux chat.md")
+        suggested = documents_directory() / (request.downloadFileName() or "HyperFlux chat.md")
         path, _ = QFileDialog.getSaveFileName(
             self, "Save chat", str(suggested), "Markdown (*.md);;Text (*.txt);;All files (*)"
         )

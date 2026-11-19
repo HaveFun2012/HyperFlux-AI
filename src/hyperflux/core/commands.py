@@ -87,7 +87,7 @@ def export_chat(engine, folder=None, now=None):
         return "There is nothing to export yet: this session has no messages."
     now = now or datetime.now()
     folder = Path(folder or paths.EXPORT_DIR)
-    lines = [f"# HyperFlux chat", "", f"Exported {now:%A, %d %B %Y at %H:%M}", ""]
+    lines = ["# HyperFlux chat", "", f"Exported {now:%A, %d %B %Y at %H:%M}", ""]
     for exchange in engine.chat_history:
         lines += ["## You", "", exchange["user"], "", "## HyperFlux", "", exchange["assistant"], ""]
     try:
