@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 import requests
 
 from hyperflux.paths import BRIDGE_TOKEN_PATH, KOBOLD_LOG_PATH
+from hyperflux.search import research
 
 _LOG_TAIL_BYTES = 64 * 1024
 # Blocks DNS-rebinding pages, which reach 127.0.0.1 under their own host name.
@@ -173,8 +174,8 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(403, {"error": "Host not allowed."})
             return
         route = urlsplit(self.path).path
-        if route not in ("/search", "/local-models/switch", "/vision/install",
-                         "/update/install", "/update/skip", "/update/prompted"):
+        if route not in ("/search", "/research/plan", "/research/sources", "/local-models/switch",
+                         "/vision/install", "/update/install", "/update/skip", "/update/prompted"):
             self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
@@ -197,6 +198,9 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {"skipped": self.update_manager.skip()})
             else:
                 self._send_json(200, {"ok": self.update_manager.mark_prompted()})
+            return
+        if route.startswith("/research/"):
+            self._research(route)
             return
         if route == "/vision/install":
             self._discard_body()
@@ -233,6 +237,42 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": results.removeprefix("SEARCH ERROR:").strip()})
             return
         self._send_json(200, {"query": optimized_query, "results": results})
+
+    def _research(self, route):
+        """The web research pipeline, in two calls so the page can show each stage:
+        /research/plan     {question, force?, previous?}  -> {search, need, queries}
+        /research/sources  {question, queries}            -> {sources, context, prompt, pages_read}
+        """
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        if not 1 <= length <= 8192:
+            self._discard_body()
+            self._send_json(413, {"error": "Request must be between 1 and 8192 bytes."})
+            return
+        try:
+            data = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json(400, {"error": "Request body must be valid JSON."})
+            return
+        question = data.get("question") if isinstance(data, dict) else None
+        if not isinstance(question, str) or not question.strip() or len(question) > 4000:
+            self._send_json(400, {"error": "The question must be 1 to 4000 characters."})
+            return
+        if route == "/research/plan":
+            previous = [str(q)[:100] for q in (data.get("previous") or [])][:6]
+            self._send_json(200, research.plan(question, force=bool(data.get("force")), previous=previous))
+            return
+        queries = [str(q).strip()[:100] for q in (data.get("queries") or []) if str(q).strip()][:3]
+        if not queries:
+            self._send_json(400, {"error": "Give 1 to 3 search queries."})
+            return
+        found = research.gather_sources(question, queries)
+        if not found["sources"]:
+            self._send_json(502, {"error": "The web search returned no usable results.", **found})
+            return
+        self._send_json(200, {**found, "prompt": research.build_answer_prompt(question, found["context"])})
 
     def _switch_model(self):
         if not self._log_token_is_valid() or self.model_manager is None:

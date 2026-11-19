@@ -9,6 +9,7 @@ from pathlib import Path
 
 import requests
 from rich.live import Live
+from rich.markdown import Markdown
 from rich.text import Text
 
 from hyperflux import paths
@@ -27,7 +28,6 @@ from hyperflux.core.models import (
 from hyperflux.core.prompts import (
     MATH_INSTRUCTIONS,
     build_capabilities,
-    build_search_prompt,
     build_system_instruction,
     build_gemma4_prompt,
     THINK_PREFILL,
@@ -35,6 +35,7 @@ from hyperflux.core.prompts import (
     reality_check_hint,
     wants_thinking,
 )
+from hyperflux.search import research
 from hyperflux.search import text as search_text
 from hyperflux.search.web_search import search_web as run_web_search
 # The terminal panel is drawn while tokens stream in (skipped when quiet=True).
@@ -179,8 +180,13 @@ class HyperFluxEngine:
         search_fallback: str | None = None,
         token_callback=None,
         quiet=False,
+        remember_as=None,
     ):
-        """Generate a reply. token_callback receives the answer so far (never the thinking)."""
+        """Generate a reply. token_callback receives the answer so far (never the thinking).
+
+        remember_as: what to keep in the chat history instead of user_prompt (e.g. the
+        user's question, not the long prompt with web sources).
+        """
         system_instruction = self.system_instruction or build_system_instruction(
             self.get_capabilities(), self.model_id, self.persona, self.custom_instructions
         )
@@ -325,7 +331,7 @@ class HyperFluxEngine:
                         refresh=True,
                     )
             self.response_rendered_live = live is not None
-            self._remember_exchange(user_prompt, response_text)
+            self._remember_exchange(remember_as or user_prompt, response_text)
             return response_text
         except (requests.exceptions.RequestException, ValueError, KeyError, TypeError) as e:
             return f"[error]Pipeline Error: {str(e)}[/error]"
@@ -340,9 +346,11 @@ class HyperFluxEngine:
         if command_response is not None:
             return command_response
 
-        # 1. Current-events questions: search first, then let the model answer.
-        if routing.is_search_intent(low_input):
-            return self._answer_with_search(user_input, quiet, token_callback)
+        # 1. Questions that need current or specific facts: research first, then answer.
+        if research.search_need(user_input) != "no":
+            answer = self._answer_with_research(user_input, quiet, token_callback)
+            if answer is not None:
+                return answer
 
         # 2. Plain arithmetic is solved locally.
         if routing.looks_like_arithmetic(low_input):
@@ -361,23 +369,45 @@ class HyperFluxEngine:
             final_prompt += MATH_INSTRUCTIONS
         return self.query_local_llm(final_prompt, token_callback=token_callback, quiet=quiet)
 
-    def _answer_with_search(self, user_input, quiet, token_callback):
-        query = self.optimize_search_query(user_input)
-        search_status = nullcontext() if quiet else console.status(
-            Text(f"Searching the web: {query[:70]}", style="brand"),
-            spinner="dots",
-            spinner_style="brand",
-        )
-        with search_status:
-            web_data = self.search_web(query, Config.SEARCH_RESULT_COUNT)
-        if web_data.startswith("SEARCH ERROR:"):
-            return f"[error]{web_data}[/error]"
-        return self.query_local_llm(
-            build_search_prompt(user_input, web_data),
-            search_fallback=web_data,
-            token_callback=token_callback,
-            quiet=quiet,
-        )
+    def _status(self, quiet, message):
+        if quiet:
+            return nullcontext()
+        return console.status(Text(message, style="brand"), spinner="dots", spinner_style="brand")
+
+    def _answer_with_research(self, user_input, quiet, token_callback):
+        """Research pipeline (see hyperflux.search.research). None = no search needed after all."""
+        question = research.question_text(user_input)
+        tried = []
+        answer = None
+        for round_number in range(1, research.MAX_ROUNDS + 1):
+            with self._status(quiet, "Deciding what to search..." if round_number == 1 else "Searching again..."):
+                planned = research.plan(user_input, force=round_number > 1, previous=list(tried))
+            if not planned["search"]:
+                return None if round_number == 1 else answer
+            tried += planned["queries"]
+            with self._status(quiet, "Searching: " + " · ".join(planned["queries"])[:90]):
+                found = research.gather_sources(question, planned["queries"])
+            if not found["sources"]:
+                if round_number < research.MAX_ROUNDS:
+                    continue
+                return answer or "[error]SEARCH ERROR: No usable search results were found.[/error]"
+            answer = self.query_local_llm(
+                research.build_answer_prompt(question, found["context"]),
+                search_fallback=found["context"],
+                token_callback=token_callback,
+                quiet=quiet,
+                remember_as=user_input,
+            )
+            if not research.is_no_answer(answer) or round_number == research.MAX_ROUNDS:
+                footer = research.sources_footer(answer, found["sources"])
+                if footer and self.chat_history:
+                    self.chat_history[-1]["assistant"] = answer + footer
+                if footer and self.response_rendered_live and not quiet:
+                    console.print(Markdown(footer.strip()))  # the answer itself was already shown live
+                return answer + footer
+            if self.chat_history:
+                self.chat_history.pop()  # the "sources don't say" reply is replaced by the next round
+        return answer
 
 
 def _thought_label(seconds):

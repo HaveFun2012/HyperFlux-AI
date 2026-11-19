@@ -25,7 +25,7 @@ Riddles and real-world "what happens if" questions think automatically even with
 - **Chats:** every chat is saved on this PC. The box above **Recent Chats** searches titles and message text, and the download icon on a chat (or `/export`) saves it as a Markdown file.
 - **Answers:** Copy and Retry on every answer, Edit on your last message, Stop while it writes. Long answers continue automatically instead of being cut off.
 - **Formatting:** LaTeX maths, tables and code blocks with Copy buttons.
-- **Web search:** questions about current events are searched automatically, with sources. `/search <question>` searches on demand.
+- **Web search:** HyperFlux decides when a question needs current or specific facts (prices, versions, news, game or product details) and skips searching for maths, coding and chat. It writes short keyword queries and splits multi-part questions into separate searches run at the same time. It opens and reads the top pages, keeps only the paragraphs that answer the question, and answers from them with numbered citations and a **Sources** list. If the sources don't answer the question, it searches once more with new words, then stops. Results are cached for 10 minutes, and the status line shows what is being searched. `/search <question>` always searches.
 - **Files:** attach a text or code file for review (the first 3,000 characters are read).
 - **Commands:** type `/` to see them: `/help`, `/search`, `/read`, `/persona`, `/export`, `/sys`, `/temp`, `/length`.
 - **Looks:** six colour themes in Dark, Light or Match system, a custom accent colour and text size.
