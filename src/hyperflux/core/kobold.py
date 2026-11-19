@@ -2,6 +2,7 @@
 
 import json
 import re
+import secrets
 
 import requests
 
@@ -21,6 +22,9 @@ def stream_generate(payload, on_token):
     """
     tokens = []
     finish_reason = None
+    # A key of its own: KoboldCpp's stream can otherwise hand back the previous
+    # request's reply (seen after a short non-streamed request).
+    payload = {"genkey": "HFX" + secrets.token_hex(6), **payload}
     with requests.post(
         STREAM_URL,
         json=payload,

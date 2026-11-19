@@ -99,6 +99,22 @@ class ReadAndTrimTests(unittest.TestCase):
         for junk in ("tracking", "navigation links", "cookies", "footer links"):
             self.assertNotIn(junk, text)
 
+    def test_tables_menus_and_notices(self):
+        html = """<body><article>
+        <p>This article is about the in-game system. For the quest, see Wishes (Quest).</p>
+        <table><tr><th>Wish</th><th>5-star rate</th></tr><tr><td>1 to 73</td><td>0.6%</td></tr>
+        <tr><td>X = 90</td><td>100%<math><annotation>{\\displaystyle 100\\%}</annotation></math></td></tr></table>
+        <ul><li><a href="/a">Version 6.7 Luna VIII</a></li><li><a href="/b">Version 7.2 Codes and more links here</a></li></ul>
+        <p>Soft pity starts at wish 74, after which the 5-star rate climbs by 6% with every wish.</p>
+        </article></body>"""
+        text = "\n".join(research.page_paragraphs(html)[1])
+        self.assertIn("1 to 73 | 0.6%", text)  # a table row stays together
+        self.assertIn("X = 90 | 100%", text)
+        self.assertNotIn("displaystyle", text)
+        self.assertNotIn("Luna", text)  # menu links
+        self.assertNotIn("This article is about", text)
+        self.assertIn("Soft pity starts at wish 74", text)
+
     def test_short_neighbouring_paragraphs_are_kept_together(self):
         self.assertEqual(research.chunks(["Hard pity: 90 wishes.", "Soft pity: from wish 74."]),
                          ["Hard pity: 90 wishes.\nSoft pity: from wish 74."])
@@ -141,10 +157,42 @@ class ReadAndTrimTests(unittest.TestCase):
         self.assertEqual(len(searched), 2)
 
 
+class WikiApiTests(unittest.TestCase):
+    def setUp(self):
+        research.clear_cache()
+
+    def test_fandom_pages_are_read_through_the_api(self):
+        class Reply:
+            status_code = 200
+            def json(self):
+                return {"parse": {"displaytitle": "<span>Wish</span>", "text": PAGE}}
+        with patch.object(research.requests, "get", return_value=Reply()) as get:
+            title, paragraphs = research.fetch_page("https://genshin-impact.fandom.com/wiki/Wish")
+        self.assertEqual(get.call_args.args[0], "https://genshin-impact.fandom.com/api.php")
+        self.assertEqual(get.call_args.kwargs["params"]["page"], "Wish")
+        self.assertEqual(title, "Wish | Genshin Impact Wiki")
+        self.assertIn("90 wishes", " ".join(paragraphs))
+        with patch.object(research.requests, "get", return_value=Reply()) as get:
+            title, _ = research.fetch_page("https://en.wikipedia.org/wiki/Gacha_game")
+        self.assertEqual(get.call_args.args[0], "https://en.wikipedia.org/w/api.php")
+        self.assertEqual(get.call_args.kwargs["params"]["page"], "Gacha game")
+        self.assertEqual(title, "Wish | Wikipedia")
+
+    def test_page_title_replaces_the_search_engines_title(self):
+        fetch = lambda q, n: [{"title": "Wish | Genshin ImpactGenshin Impact Wish", "url": "https://w.example/wish",
+                               "body": "Wishes."}]
+        read = lambda url: ("Wish | Genshin Impact Wiki", research.page_paragraphs(PAGE)[1])
+        found = research.gather_sources("How does Genshin pity work?", ["Genshin pity"], fetch=fetch, read=read)
+        self.assertEqual(found["sources"][0]["title"], "Wish | Genshin Impact Wiki")
+
+    def test_game_references_rank_high(self):
+        self.assertGreater(research.source_quality("https://game8.co/games/Genshin-Impact/archives/305937"), 0)
+
+
 class AnswerTests(unittest.TestCase):
     def test_answer_prompt_and_no_answer_detection(self):
         prompt = research.build_answer_prompt("/search genshin pity", "[1] Wiki\nhttps://x\n90 wishes")
-        self.assertIn("cite them like [1]", prompt)
+        self.assertIn("Cite sources like [1]", prompt)
         self.assertIn(research.NO_ANSWER_OPENING, prompt)
         self.assertTrue(prompt.endswith("Question: genshin pity"))
         self.assertTrue(research.is_no_answer("The sources I found don't say what the pity is."))
@@ -159,7 +207,28 @@ class AnswerTests(unittest.TestCase):
         self.assertIn("1. [Wiki (Genshin)]", both)
         self.assertIn("2. [News]", both)
 
+    def test_answer_prompt_asks_for_explanations_in_natural_style(self):
+        prompt = research.build_answer_prompt("genshin pity", "[1] Wiki")
+        self.assertIn("Explain how each part works, with the key numbers; don't just name features.", prompt)
+        self.assertIn("Cite sources like [1] or [2] once per paragraph, not after every sentence.", prompt)
+        self.assertIn("Write naturally, as you normally would", prompt)
+
+    def test_repeated_titles_are_cut_at_the_repeat(self):
+        self.assertEqual(research.tidy_title("Wish system explained - Genshin ImpactGenshin Impact Wish system guide"),
+                         "Wish system explained - Genshin Impact")
+        self.assertEqual(research.tidy_title("The Genshin Impact gacha guide for new playersGenshin Impact gacha"),
+                         "The Genshin Impact gacha guide for new players")
+
+    def test_echoed_queries_are_spotted(self):
+        queries = ["Genshin Impact gacha system explained", "Genshin Impact banner mechanics 2026"]
+        self.assertTrue(research.is_echoed_queries(
+            "Genshin Impact gacha system explained\nGenshin Impact banner mechanics", queries))
+        self.assertFalse(research.is_echoed_queries("The gacha system, called Wish, uses Fates [1].", queries))
+        self.assertFalse(research.is_echoed_queries("", queries))
+
     def test_glued_titles_are_tidied(self):
+        self.assertEqual(research.tidy_title("Here's How The Gacha System Works In Genshin ImpactWish | Genshin Impact Wiki | Fandom"),
+                         "Here's How The Gacha System Works In Genshin Impact")
         self.assertEqual(research.tidy_title("Banner Schedule (November 2026) | Genshin ...Genshin Impact 2026 Banner"),
                          "Banner Schedule (November 2026) | Genshin")
         self.assertEqual(research.tidy_title("How to watch on YouTube Premium for free"), "How to watch on YouTube Premium for free")
@@ -189,6 +258,21 @@ class EngineResearchTests(unittest.TestCase):
         self.assertEqual(plan.call_args_list[1].kwargs["previous"], ["genshin pity"])
         self.assertEqual(len(engine.chat_history), 1)  # only the final answer is remembered
         self.assertEqual(engine.chat_history[0]["user"], "How does Genshin gacha system works?")
+
+
+class ResearchPromptThinkingTests(unittest.TestCase):
+    def test_research_prompt_does_not_switch_on_thinking(self):
+        from hyperflux.core.engine import HyperFluxEngine
+        from tests.test_core import FakeStreamResponse
+        with patch.object(HyperFluxEngine, "_load_model_name"):
+            engine = HyperFluxEngine()
+        prompt = research.build_answer_prompt("How does Genshin gacha system works?", "[1] Wiki")
+        self.assertIn("Explain how", prompt)  # would look like a riddle ("explain how") on its own
+        with patch("hyperflux.core.kobold.requests.post", return_value=FakeStreamResponse()) as post:
+            engine.query_local_llm(prompt, quiet=True, remember_as="How does Genshin gacha system works?")
+        sent = post.call_args.kwargs["json"]["prompt"]
+        self.assertNotIn("<|think|>", sent)
+        self.assertNotIn("may be a riddle", sent)
 
 
 class BridgeResearchTests(unittest.TestCase):

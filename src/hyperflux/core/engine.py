@@ -190,11 +190,14 @@ class HyperFluxEngine:
         system_instruction = self.system_instruction or build_system_instruction(
             self.get_capabilities(), self.model_id, self.persona, self.custom_instructions
         )
-        thinking_enabled = wants_thinking(user_prompt, self.thinking_enabled, self.model_id)
+        # Whether to think (and the riddle hint) depends on what the user wrote, not on
+        # instructions the app wrapped around it (a research prompt says "explain how...").
+        intent = remember_as or user_prompt
+        thinking_enabled = wants_thinking(intent, self.thinking_enabled, self.model_id)
         system_instruction += "\n\n" + build_thinking_instruction(
-            user_prompt, self.thinking_enabled, self.model_id
+            intent, self.thinking_enabled, self.model_id
         )
-        hint = reality_check_hint(user_prompt)
+        hint = reality_check_hint(intent)
         if hint:
             system_instruction += "\n\n" + hint
         full_context_prompt = self._build_context_prompt(
@@ -391,13 +394,19 @@ class HyperFluxEngine:
                 if round_number < research.MAX_ROUNDS:
                     continue
                 return answer or "[error]SEARCH ERROR: No usable search results were found.[/error]"
-            answer = self.query_local_llm(
-                research.build_answer_prompt(question, found["context"]),
-                search_fallback=found["context"],
-                token_callback=token_callback,
-                quiet=quiet,
-                remember_as=user_input,
-            )
+            answer_prompt = research.build_answer_prompt(question, found["context"])
+            for _attempt in range(2):
+                answer = self.query_local_llm(
+                    answer_prompt,
+                    search_fallback=found["context"],
+                    token_callback=token_callback,
+                    quiet=quiet,
+                    remember_as=user_input,
+                )
+                if not research.is_echoed_queries(answer, planned["queries"]):
+                    break
+                if self.chat_history:
+                    self.chat_history.pop()  # a stale reply; ask again once
             if answer.startswith("[error]"):
                 return answer  # no sources list under an error message
             if not research.is_no_answer(answer) or round_number == research.MAX_ROUNDS:

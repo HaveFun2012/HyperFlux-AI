@@ -1821,7 +1821,9 @@ function styleExamples(model) {
   return lines.join('\n') + '\n';
 }
 
-function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelId) {
+// intentText: what the user typed, when `prompt` is a longer prompt the app built around it
+// (e.g. answering from web sources); the riddle check must only look at the user's words.
+function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelId, intentText) {
   var model = MODEL_TIERS[modelId || activeModelId];
   var currentPicture = visionReady && hasPicture(attachment);
   var historyPicture = visionReady && !currentPicture ? latestPictureIndex(messages) : -1;
@@ -1845,8 +1847,9 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
     thinkingExempt ? NO_THINKING_GUIDANCE
       : model.thinking === 'always' ? DEEP_THINKING_GUIDANCE : THINKING_GUIDANCE
   );
-  if (REALITY_CHECK_PATTERN.test(String(prompt))) {
-    systemInstruction += '\n' + [REALITY_CHECK_HINT].concat(nameWordNotes(prompt)).join('\n');
+  var intent = String(intentText || prompt);
+  if (REALITY_CHECK_PATTERN.test(intent)) {
+    systemInstruction += '\n' + [REALITY_CHECK_HINT].concat(nameWordNotes(intent)).join('\n');
   }
   if (currentPicture || historyPicture >= 0) systemInstruction += '\n' + IMAGE_HONESTY_RULE;
   // Gemma 4 format. <|think|> at the top of the system turn turns on native
@@ -3478,7 +3481,8 @@ var HF = (function(){
           modelPrompt,
           attachment,
           thinkingExempt,
-          requestModel
+          requestModel,
+          prompt
         );
         lastContextTokens = Math.ceil(sessionPrompt.length / 3);
         var generationStarted = performance.now();
