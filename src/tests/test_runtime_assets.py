@@ -61,7 +61,7 @@ class HyperFluxSetupTests(unittest.TestCase):
                 patch.object(runtime_assets, "APP_DATA", root / "data"),
             ):
                 found = runtime_assets.find_gguf_models()
-            self.assertEqual(set(found), {first_model, second_model})
+            self.assertEqual(set(found), {first_model.resolve(), second_model.resolve()})
 
     def test_download_verifies_hash_and_size(self):
         content = b"verified model bytes"
