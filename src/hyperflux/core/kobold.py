@@ -25,7 +25,9 @@ def stream_generate(payload, on_token):
         STREAM_URL,
         json=payload,
         headers={"Accept": "text/event-stream"},
-        timeout=(10, 120),
+        # The first token can take minutes on a slow GPU (a long prompt with web sources
+        # is read in full first); same limit as non-streamed generation.
+        timeout=(10, 600),
         stream=True,
     ) as response:
         if response.status_code in {404, 405, 501}:

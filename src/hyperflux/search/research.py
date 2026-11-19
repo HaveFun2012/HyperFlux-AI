@@ -62,6 +62,13 @@ _SPECIFIC_WORDS = re.compile(
     r"compare|comparison|best|top \d+|where can i buy|open now|opening hours)\b",
     re.IGNORECASE,
 )
+# Numbers and rules of named games and products: a small model is sure it knows them
+# (it doesn't, or they changed), so these always search instead of asking it.
+_FACT_WORDS = re.compile(
+    r"\b(?:pity|gacha|banners?|drop rates?|rates|odds|price|prices|cost|costs|how much|release date|"
+    r"version|patch|specs|requirements|schedule|tier list|meta|stats|ranking)\b",
+    re.IGNORECASE,
+)
 _PROPER_NOUN = re.compile(r"(?<!^)(?<![.!?]\s)\b[A-Z][a-zA-Z0-9]{2,}|\b[A-Za-z]+\d+[A-Za-z\d]*\b")
 
 
@@ -82,7 +89,10 @@ def search_need(question):
         return "yes"
     if routing.looks_like_arithmetic(low) or routing.is_math_request(low):
         return "no"
-    if _SPECIFIC_WORDS.search(text) or _PROPER_NOUN.search(text):
+    named = bool(_PROPER_NOUN.search(text)) or bool(re.search(r"\b(?:genshin|honkai|minecraft|roblox|valorant)\b", low))
+    if named and _FACT_WORDS.search(text):
+        return "yes"
+    if _SPECIFIC_WORDS.search(text) or named:
         return "maybe"
     return "no"
 
@@ -100,10 +110,21 @@ _PLAN_INSTRUCTION = (
     "A search is needed for facts that are current, specific or likely to have changed: prices, news, "
     "versions, rates, schedules, rules or numbers in games and products, and who holds a role. It is not "
     "needed for stable general knowledge, maths, coding help or chat.\n"
+    "Games, apps and products change often, so their rules, numbers and prices need a search.\n"
     "If a search is needed, write 1 to 3 short search-engine queries of 2 to 6 keywords each, one per "
     "line, and nothing else. Use names and key terms, not the user's sentence. If the question has "
-    "several parts, write one query per part. {no_rule}"
+    "several parts, write one query per part. {no_rule}\n\n"
+    "Examples:\n"
+    "Question: How does Genshin gacha system works?\n"
+    "Genshin Impact pity system\nGenshin Impact Capturing Radiance\n\n"
+    "Question: Compare the pity in Genshin and Honkai Star Rail\n"
+    "Genshin Impact pity system\nHonkai Star Rail pity system\n\n"
+    "Question: How much is the iPhone 17 Pro in Malaysia?\n"
+    "iPhone 17 Pro price Malaysia\n\n"
+    "{no_example}"
 )
+_NO_EXAMPLES = ("Question: What is the capital of France?\nNO\n\n"
+                "Question: Explain recursion in Python\nNO\n\n")
 _CURRENT_WORDS = re.compile(
     r"\b(?:latest|current|currently|new|newest|now|today|price|prices|cost|version|patch|update|"
     r"release|news|this year|schedule|banner|meta|tier list)\b",
@@ -168,7 +189,8 @@ def plan(question, force=False, previous=(), ask=ask_model):
     instruction = _PLAN_INSTRUCTION.format(
         today=datetime.now().astimezone().strftime("%A, %d %B %Y"),
         no_rule="" if must_search else "If no search is needed, write only: NO",
-    )
+        no_example="" if must_search else _NO_EXAMPLES,
+    ).rstrip()
     user = text
     if previous:
         user += ("\n\nThese queries did not find the answer: " + "; ".join(previous) +
@@ -446,6 +468,24 @@ def best_passages(question, queries, pages, limit=PASSAGES_TO_KEEP):
     return chosen
 
 
+def tidy_title(title, url=""):
+    """A short, readable source title. Some engines glue several titles together
+    ("...Guide | Game8Genshin Impact 2026 Banner..."): keep the first one."""
+    title = " ".join(str(title or "").split())
+    cut = re.search(r"\s?(?:\.\.\.|…)(?=[A-Z])", title)  # "...Genshin ...Genshin Impact 2026"
+    if cut and cut.start() > 20:
+        title = title[:cut.start()].rstrip(" |-")
+    for glued in re.finditer(r"(?<=[a-z0-9)])(?=[A-Z][a-z])", title):
+        head = title[:glued.start()]
+        # Only after a "Title | Site" part, so names like YouTube or iPhone stay whole.
+        if len(head) > 20 and re.search(r"\s[|–—-]\s", head):
+            title = head
+            break
+    if len(title) > 90:
+        title = title[:90].rsplit(" ", 1)[0] + "..."
+    return title or (urlparse(url).hostname or "Untitled source")
+
+
 def gather_sources(question, queries, fetch=fetch_search_results, read=fetch_page):
     """Search, read the top pages and keep the best paragraphs.
 
@@ -470,7 +510,7 @@ def gather_sources(question, queries, fetch=fetch_search_results, read=fetch_pag
     def source_for(result):
         url = result.get("url") or ""
         if url not in by_url:
-            by_url[url] = {"n": len(sources) + 1, "title": result.get("title") or url or "Untitled",
+            by_url[url] = {"n": len(sources) + 1, "title": tidy_title(result.get("title"), url),
                            "url": url, "passages": []}
             sources.append(by_url[url])
         return by_url[url]
@@ -522,7 +562,9 @@ def is_no_answer(reply):
 
 def sources_footer(answer, sources):
     """A Markdown list of the sources the answer cites (or all of them if it cites none)."""
-    cited = {int(n) for n in re.findall(r"\[(\d{1,2})\]", str(answer or ""))}
+    # [2], and also [2, 3] or [1][2] as small models write them
+    cited = {int(n) for group in re.findall(r"\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]", str(answer or ""))
+             for n in re.findall(r"\d+", group)}
     shown = [s for s in sources if s["n"] in cited] or sources
     if not shown:
         return ""

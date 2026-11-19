@@ -398,6 +398,8 @@ class HyperFluxEngine:
                 quiet=quiet,
                 remember_as=user_input,
             )
+            if answer.startswith("[error]"):
+                return answer  # no sources list under an error message
             if not research.is_no_answer(answer) or round_number == research.MAX_ROUNDS:
                 footer = research.sources_footer(answer, found["sources"])
                 if footer and self.chat_history:

@@ -31,8 +31,10 @@ class DecideTests(unittest.TestCase):
             "How do I write a for loop in Python?": "no",
             "What is 15% of 240?": "no",
             "Why is the sky blue?": "no",
-            "How does Genshin gacha system works?": "maybe",
-            "How much does an RTX 5090 cost in Malaysia?": "maybe",
+            "How does Genshin gacha system works?": "yes",
+            "Compare the pity in Genshin and Honkai Star Rail": "yes",
+            "Who designed the Eiffel Tower?": "maybe",
+            "How much does an RTX 5090 cost in Malaysia?": "yes",
         }
         for question, expected in cases.items():
             self.assertEqual(research.search_need(question), expected, question)
@@ -62,10 +64,13 @@ class QueryTests(unittest.TestCase):
             return "Genshin Impact pity system\nGenshin Capturing Radiance"
         self.assertEqual(research.plan("hello there friend", ask=ask)["search"], False)
         self.assertEqual(calls, [])  # clear "no": no model call
-        result = research.plan("How does Genshin gacha system works?", ask=ask)
+        result = research.plan("Who designed the Eiffel Tower?", ask=ask)
         self.assertEqual(result["queries"], ["Genshin Impact pity system", "Genshin Capturing Radiance"])
         self.assertIn("If no search is needed, write only: NO", calls[-1][0])
-        self.assertFalse(research.plan("How does Genshin gacha work?", ask=lambda s, u: "NO")["search"])
+        self.assertIn("Question: What is the capital of France?\nNO", calls[-1][0])
+        research.plan("How does Genshin gacha system works?", ask=ask)
+        self.assertNotIn("write only: NO", calls[-1][0])  # rules said yes: the model may not refuse
+        self.assertFalse(research.plan("Who designed the Eiffel Tower?", ask=lambda s, u: "NO")["search"])
 
     def test_plan_retry_needs_new_queries_and_survives_a_busy_model(self):
         seen = {}
@@ -150,6 +155,15 @@ class AnswerTests(unittest.TestCase):
         sources = [{"n": 1, "title": "Wiki [Genshin]", "url": "https://a"}, {"n": 2, "title": "News", "url": "https://b"}]
         self.assertEqual(research.sources_footer("Pity is 90 [1].", sources), "\n\n**Sources**\n1. [Wiki (Genshin)](https://a)")
         self.assertIn("2. [News](https://b)", research.sources_footer("No citations.", sources))
+        both = research.sources_footer("Fates cost 160 Primogems [1, 2].", sources)
+        self.assertIn("1. [Wiki (Genshin)]", both)
+        self.assertIn("2. [News]", both)
+
+    def test_glued_titles_are_tidied(self):
+        self.assertEqual(research.tidy_title("Banner Schedule (November 2026) | Genshin ...Genshin Impact 2026 Banner"),
+                         "Banner Schedule (November 2026) | Genshin")
+        self.assertEqual(research.tidy_title("How to watch on YouTube Premium for free"), "How to watch on YouTube Premium for free")
+        self.assertEqual(research.tidy_title("", "https://www.example.com/a"), "www.example.com")
 
 
 class EngineResearchTests(unittest.TestCase):
