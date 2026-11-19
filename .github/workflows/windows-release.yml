@@ -42,7 +42,7 @@ jobs:
           python-version: "3.14.8"
           architecture: x64
 
-            - name: Install Inno Setup
+      - name: Install Inno Setup
         shell: pwsh
         run: |
           $installer = Join-Path $env:RUNNER_TEMP "innosetup-6.7.3.exe"
