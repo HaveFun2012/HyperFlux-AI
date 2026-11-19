@@ -18,7 +18,7 @@ Riddles and real-world "what happens if" questions think automatically even with
 
 **In the desktop app:**
 
-- **Pictures:** attach a photo or screenshot with the paperclip and ask about it. Turn this on once in **Settings → Image input**, which downloads the vision file for your Gemma 4 E2B or E4B model (about 1 GB).
+- **Pictures:** attach a photo or screenshot with the paperclip and ask about it, including follow-up questions. HyperFlux keeps seeing the latest picture in the chat. Before sending, you can drag a box around the part that matters, such as small text, so it reaches the model much larger. If HyperFlux can't read something in a picture, it says so instead of guessing. Turn this on once in **Settings → Image input**, which downloads the vision file for your Gemma 4 E2B or E4B model (about 1 GB).
 - **Read aloud:** a **Read aloud** button under every answer speaks it with the Windows voices; the voice is chosen in Settings.
 - **Custom instructions:** tell HyperFlux about yourself once (**Settings → Custom instructions**, up to 1,500 characters), and it is sent with every message.
 - **Personas:** Default, Tutor, Coder, Concise or Friendly change the tone (**Settings → Persona** or `/persona tutor`).
@@ -94,7 +94,7 @@ The setup script downloads the runtime and KoboldCpp, but not model weights. Ens
 - Desktop chat history, settings, and embedded-browser data are stored under `%LOCALAPPDATA%\HyperFlux`.
 - KoboldCpp output is written to `%LOCALAPPDATA%\HyperFlux\logs\kobold.log` and is available from the **Server logs** button beside the server status.
 - When a model thinks (Horizon 1, Apex 1 with **Think** on, or a riddle), its thinking streams live and then folds into a collapsed box above the answer. Greetings and direct name questions never think.
-- **Image input** uses a vision projector file (`mmproj-gemma-4-E2B-it-BF16.gguf` or `mmproj-gemma-4-E4B-it-BF16.gguf`, about 1 GB) saved to `%LOCALAPPDATA%\HyperFlux\models`. It is pinned to the same Hugging Face commits as the models and checked against a fixed SHA-256. When it is present, the desktop app starts KoboldCpp with `--mmproj`. Pictures are reduced to at most 1,024 pixels on their longest side before they are sent and saved; if chat storage fills up, the oldest pictures are removed first and the text is kept. Answers about pictures are slower, especially on GPUs with 4 GB or less.
+- **Image input** uses a vision projector file (`mmproj-gemma-4-E2B-it-BF16.gguf` or `mmproj-gemma-4-E4B-it-BF16.gguf`, about 1 GB) saved to `%LOCALAPPDATA%\HyperFlux\models`. It is pinned to the same Hugging Face commits as the models and checked against a fixed SHA-256. When it is present, the desktop app starts KoboldCpp with `--mmproj`. Pictures (or the cropped part) are reduced to at most 1,536 pixels on their longest side before they are sent and saved. Each request sends one picture: the one attached now, or else the latest one in the chat; older pictures are only mentioned, to save context. If chat storage fills up, the oldest pictures are removed first and the text is kept. Answers about pictures are slower, especially on GPUs with 4 GB or less.
 - The embedded desktop interface and the browser interface keep separate `localStorage` histories and settings, including custom instructions and persona.
 - The terminal and desktop app retain separate chat histories. The terminal's persona and custom instructions are stored in `%LOCALAPPDATA%\HyperFlux\terminal_settings.json`, and `/export` in the terminal writes to `Documents\HyperFlux exports`.
 
