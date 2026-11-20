@@ -2728,15 +2728,15 @@ async function startResearch(prompt, statusNode, signal, previous) {
   return {queries: tried, sources: found.data.sources, prompt: found.data.prompt};
 }
 
-// Same as sources_footer() in research.py: the sources the answer cites, or all of them.
+// Same as sources_footer() in research.py: the sources the answer cites.
 function sourcesFooter(answer, sources) {
   var cited = {};
   // [2], and also [2, 3] as small models write them
   (String(answer).match(/\[\d{1,2}(?:\s*,\s*\d{1,2})*\]/g) || []).forEach(function(tag) {
     (tag.match(/\d+/g) || []).forEach(function(n) { cited[Number(n)] = true; });
   });
+  // An answer that cites no source didn't use them: no list.
   var shown = sources.filter(function(source) { return cited[source.n]; });
-  if (!shown.length) shown = sources;
   if (!shown.length) return '';
   return '\n\n**Sources**\n' + shown.map(function(source) {
     var title = String(source.title || source.url).replace(/[\[\]]/g, '');

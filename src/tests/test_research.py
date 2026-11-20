@@ -34,6 +34,11 @@ class DecideTests(unittest.TestCase):
             "How does Genshin gacha system works?": "yes",
             "Compare the pity in Genshin and Honkai Star Rail": "yes",
             "Who designed the Eiffel Tower?": "maybe",
+            "A bat and a ball cost RM1.10 in total. The bat costs RM1.00 more than the ball. "
+            "How much does the ball cost?": "no",  # gives its own amounts: a calculation
+            "A train travels 42 km in 3 hours. What is its average speed?": "no",
+            "How much is the iPhone 17 Pro vs iPhone 16 in Malaysia?": "yes",  # numbers in names
+            "What was the population of Malaysia in 2020 and 2024?": "maybe",  # years
             "How much does an RTX 5090 cost in Malaysia?": "yes",
         }
         for question, expected in cases.items():
@@ -202,7 +207,7 @@ class AnswerTests(unittest.TestCase):
     def test_footer_lists_cited_sources(self):
         sources = [{"n": 1, "title": "Wiki [Genshin]", "url": "https://a"}, {"n": 2, "title": "News", "url": "https://b"}]
         self.assertEqual(research.sources_footer("Pity is 90 [1].", sources), "\n\n**Sources**\n1. [Wiki (Genshin)](https://a)")
-        self.assertIn("2. [News](https://b)", research.sources_footer("No citations.", sources))
+        self.assertEqual(research.sources_footer("No citations.", sources), "")  # unused sources: no list
         both = research.sources_footer("Fates cost 160 Primogems [1, 2].", sources)
         self.assertIn("1. [Wiki (Genshin)]", both)
         self.assertIn("2. [News]", both)

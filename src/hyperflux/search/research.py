@@ -73,6 +73,29 @@ _FACT_WORDS = re.compile(
 _PROPER_NOUN = re.compile(r"(?<!^)(?<![.!?]\s)\b[A-Z][a-zA-Z0-9]{2,}|\b[A-Za-z]+\d+[A-Za-z\d]*\b")
 
 
+_CURRENCY = re.compile(r"(?:rm|myr|usd|sgd|\$|€|£|¥)\s?$", re.IGNORECASE)
+
+
+def given_amounts(text):
+    """Numbers the question supplies as amounts. Years (2024) and numbers that are part of
+    a name (iPhone 17, RTX 5090, version 7.2) don't count; money always does."""
+    amounts = []
+    for match in re.finditer(r"\d+(?:[.,]\d+)?%?", text):
+        before = text[:match.start()]
+        if _CURRENCY.search(before):
+            amounts.append(match.group())
+            continue
+        if re.fullmatch(r"(?:19|20)\d{2}", match.group()):
+            continue
+        attached = re.search(r"[A-Za-z]+$", before)
+        previous = re.search(r"([A-Za-z]+)\s+$", before)
+        if attached or (previous and (any(c.isupper() for c in previous.group(1))
+                                      or previous.group(1).lower() in {"version", "patch", "gen", "season"})):
+            continue  # part of a name
+        amounts.append(match.group())
+    return amounts
+
+
 def search_need(question):
     """'yes' (search), 'no' (don't) or 'maybe' (ask the model)."""
     text = str(question or "").strip()
@@ -89,6 +112,10 @@ def search_need(question):
     if routing.is_search_intent(low):
         return "yes"
     if routing.looks_like_arithmetic(low) or routing.is_math_request(low):
+        return "no"
+    # A question that gives its own amounts ("cost RM1.10 ... RM1.00 more", "42 km in 3 hours")
+    # is a calculation or a puzzle, not a lookup.
+    if len(given_amounts(text)) >= 2:
         return "no"
     named = bool(_PROPER_NOUN.search(text)) or bool(re.search(r"\b(?:genshin|honkai|minecraft|roblox|valorant)\b", low))
     if named and _FACT_WORDS.search(text):
@@ -667,11 +694,12 @@ def is_echoed_queries(reply, queries):
 
 
 def sources_footer(answer, sources):
-    """A Markdown list of the sources the answer cites (or all of them if it cites none)."""
+    """A Markdown list of the sources the answer cites. An answer that cites none didn't
+    use them, so it gets no list (listing them would wrongly suggest it did)."""
     # [2], and also [2, 3] or [1][2] as small models write them
     cited = {int(n) for group in re.findall(r"\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]", str(answer or ""))
              for n in re.findall(r"\d+", group)}
-    shown = [s for s in sources if s["n"] in cited] or sources
+    shown = [s for s in sources if s["n"] in cited]
     if not shown:
         return ""
     lines = [f"{s['n']}. [{s['title'].replace('[', '(').replace(']', ')')}]({s['url']})" if s["url"]
