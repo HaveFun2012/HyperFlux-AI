@@ -43,4 +43,12 @@ Name: "{autodesktop}\HyperFlux"; Filename: "{app}\HyperFlux.exe"; Tasks: desktop
 [Run]
 Filename: "{app}\HyperFlux.exe"; Description: "Launch HyperFlux"; Flags: postinstall nowait skipifsilent
 ; In-app updates run this installer silently; reopen HyperFlux when it's done.
-Filename: "{app}\HyperFlux.exe"; Flags: nowait; Check: WizardSilent
+; Automated checks (the release workflow) pass /NORELAUNCH=1 so nothing is left running.
+Filename: "{app}\HyperFlux.exe"; Flags: nowait; Check: ShouldRelaunch
+
+[Code]
+// Reopen HyperFlux after a silent install (an in-app update), unless told not to.
+function ShouldRelaunch: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:NORELAUNCH|0}') <> '1');
+end;

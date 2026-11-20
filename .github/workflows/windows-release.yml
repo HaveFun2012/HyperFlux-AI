@@ -107,9 +107,18 @@ jobs:
           if (-not (Test-Path src\dist\HyperFlux\HyperFlux.exe)) {
             throw "Packaged application executable is missing."
           }
-          & src\dist\HyperFlux\HyperFlux.exe --smoke-test
-          if ($LASTEXITCODE -ne 0) {
-            throw "Packaged application smoke test failed with exit code $LASTEXITCODE."
+          # HyperFlux is a windowed app: "&" would not wait for it, so wait explicitly.
+          function Invoke-SmokeTest($exe) {
+            $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -PassThru
+            if (-not $process.WaitForExit(180000)) {
+              $process.Kill()
+              throw "$exe --smoke-test did not finish within 3 minutes."
+            }
+            return $process.ExitCode
+          }
+          $code = Invoke-SmokeTest (Resolve-Path src\dist\HyperFlux\HyperFlux.exe).Path
+          if ($code -ne 0) {
+            throw "Packaged application smoke test failed with exit code $code."
           }
           $installRoot = Join-Path $env:TEMP ("HyperFlux-installer-smoke-" + [guid]::NewGuid().ToString("N"))
           $installDir = Join-Path $installRoot "app"
@@ -121,17 +130,21 @@ jobs:
               "/SUPPRESSMSGBOXES",
               "/NORESTART",
               "/SP-",
-              "/TASKS=!desktopicon"
+              "/TASKS=!desktopicon",
+              "/NORELAUNCH=1"  # don't open HyperFlux afterwards (it would never close here)
             )
-            $installer = Start-Process -FilePath (Resolve-Path src\dist\HyperFlux-Setup.exe).Path -ArgumentList $arguments -Wait -PassThru
+            # WaitForExit waits for the installer only; -Wait would also wait for anything it starts.
+            $installer = Start-Process -FilePath (Resolve-Path src\dist\HyperFlux-Setup.exe).Path -ArgumentList $arguments -PassThru
+            if (-not $installer.WaitForExit(600000)) { throw "The installer did not finish within 10 minutes." }
             if ($installer.ExitCode -ne 0) {
               throw "Installer returned exit code $($installer.ExitCode)."
             }
-            & "$installDir\HyperFlux.exe" --smoke-test
-            if ($LASTEXITCODE -ne 0) {
-              throw "Installed app smoke test failed with exit code $LASTEXITCODE."
+            $code = Invoke-SmokeTest "$installDir\HyperFlux.exe"
+            if ($code -ne 0) {
+              throw "Installed app smoke test failed with exit code $code."
             }
-            $uninstaller = Start-Process -FilePath "$installDir\unins000.exe" -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+            $uninstaller = Start-Process -FilePath "$installDir\unins000.exe" -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -PassThru
+            if (-not $uninstaller.WaitForExit(300000)) { throw "The uninstaller did not finish within 5 minutes." }
             if ($uninstaller.ExitCode -ne 0) {
               throw "Uninstaller returned exit code $($uninstaller.ExitCode)."
             }

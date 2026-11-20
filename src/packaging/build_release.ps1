@@ -42,7 +42,12 @@ try {
     Invoke-Step "App bundle" {
         & $Python -m PyInstaller --noconfirm --clean --log-level WARN --distpath dist --workpath build packaging\hyperflux.spec
     }
-    Invoke-Step "Smoke test" { & dist\HyperFlux\HyperFlux.exe --smoke-test }
+    Invoke-Step "Smoke test" {
+        # HyperFlux is a windowed app: "&" would not wait for it or report its exit code.
+        $smoke = Start-Process -FilePath (Resolve-Path dist\HyperFlux\HyperFlux.exe).Path -ArgumentList "--smoke-test" -PassThru
+        if (-not $smoke.WaitForExit(180000)) { $smoke.Kill(); throw "The smoke test did not finish within 3 minutes." }
+        $global:LASTEXITCODE = $smoke.ExitCode
+    }
     $env:HYPERFLUX_VERSION = $Version
     Invoke-Step "Installer" { & $Iscc /Qp packaging\installer\HyperFlux.iss }
     Invoke-Step "Release notes" { & $Python packaging\release-notes\generate.py --version "v$Version" }
