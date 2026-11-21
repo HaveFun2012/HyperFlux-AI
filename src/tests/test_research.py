@@ -280,6 +280,87 @@ class ResearchPromptThinkingTests(unittest.TestCase):
         self.assertNotIn("may be a riddle", sent)
 
 
+class RepeatTests(unittest.TestCase):
+    """A small model repeats what it reads twice; pages repeat each other too."""
+
+    def test_repeated_sentences_are_dropped_from_the_sources(self):
+        seen = []
+        first = "Hard pity is 90 pulls on the character banner. Soft pity starts at wish 74."
+        again = "On the character banner, hard pity is 90 pulls. The base rate is 0.6% for each pull."
+        self.assertEqual(research.novel_text(first, seen), first)
+        # the repeated fact goes; the new one stays
+        self.assertEqual(research.novel_text(again, seen), "The base rate is 0.6% for each pull.")
+        # a different number is a different fact, even with nearly the same words
+        weapon = "Hard pity is 80 pulls on the weapon banner."
+        self.assertEqual(research.novel_text(weapon, seen), weapon)
+        # table rows are never touched
+        self.assertEqual(research.novel_text("Hard pity | 90 | 80", seen), "Hard pity | 90 | 80")
+
+    def test_best_passages_do_not_waste_slots_on_repeats(self):
+        fact = ("The Genshin pity system guarantees a 5-star item within 90 wishes on the character banner, "
+                "and soft pity starts around wish 74 when the 0.6% base rate climbs sharply.")
+        best = research.best_passages("How does Genshin pity work, how many wishes?", ["Genshin pity system"],
+                                      [[fact], [fact], ["Fates cost 160 Primogems each in the shop menu."]])
+        texts = [t for _, _, t in best]
+        self.assertEqual(sum("guarantees a 5-star" in t for t in texts), 1)  # said once, not twice
+
+    def test_answer_repeats_are_merged_and_citations_kept(self):
+        answer = ("Primogems turn into Fates at 160 each [2]. Character wishes have a 90 pull hard pity [1].\n\n"
+                  "To summarise, Primogems turn into Fates at 160 each [3]. Weapon wishes have an 80 pull pity [1].")
+        tidy = research.dedupe_sentences(answer)
+        self.assertEqual(tidy.count("160"), 1)
+        self.assertIn("at 160 each [2, 3].", tidy)  # the dropped sentence's source is not lost
+        self.assertIn("80 pull pity [1]", tidy)      # a different fact stays
+        self.assertIn("90 pull hard pity", tidy)
+
+    def test_a_closing_recap_is_dropped_but_a_real_summary_is_kept(self):
+        body = ("Primogems turn into Fates at 160 each [2]. The system tracks pity counters and guarantees "
+                "for each banner type you pull on [1].")
+        recap = ("To put it simply, you convert Primogems to Fates, then spend those Fates while the system "
+                 "tracks pity counters and guarantees for each banner you pull on [2].")
+        # it repeats the second sentence closely, so it is merged into it and its source moves across
+        self.assertEqual(research.dedupe_sentences(body + "\n\n" + recap), body.replace("on [1].", "on [1, 2]."))
+        # the answer HyperFlux really wrote about Genshin (a paraphrased closing recap, no near-copies)
+        real = (
+            "The Genshin Impact gacha system operates through a mechanic called Wish, which is how players "
+            "acquire new characters and weapons using Primogems [2]. Primogems are the game's primary premium "
+            "currency, which players earn by completing activities like quests and daily commissions, and these "
+            "Primogems are converted into Fates at a rate of 160 Primogems per Fate [2, 3]. These Fates are the "
+            "actual tickets used when pulling on the various banners available in the game [3].\n\n"
+            "The system uses several layered guarantees based on the type of banner you are pulling on. For "
+            "instance, a Character Event Wish has a 90-pull hard pity, meaning you are guaranteed a 5-star item "
+            "by the 90th pull [2]. Furthermore, there are specific pity counters for different banner types; for "
+            "a Featured Character Banner, the hard pity is 90 Wishes, while a Featured Weapon Banner has a pity "
+            "of 80 Wishes [1].\n\n"
+            "To put it simply, you convert Primogems to Fates, and then you spend those Fates while the system "
+            "tracks various pity counters and guarantees tied to the specific banner you are pulling on [2]. "
+            "For example, a general pity system means you are guaranteed a 4-star or 5-star after a certain "
+            "number of pulls [1].")
+        tidy = research.dedupe_sentences(real)
+        self.assertNotIn("To put it simply", tidy)
+        self.assertIn("guaranteed a 4-star or 5-star", tidy)  # the new example in that paragraph survives
+        self.assertIn("80 Wishes", tidy)
+        # "Overall" with something new to say stays: most of its words are not in the answer yet
+        fresh = "Overall, Malaysia's rainy season runs from November until March on the east coast."
+        self.assertEqual(research.dedupe_sentences(body + " " + fresh), body + " " + fresh)
+        # an opening "In short" has nothing before it to repeat, so it stays
+        self.assertEqual(research.dedupe_sentences("In short, the answer is yes because the pity system exists."),
+                         "In short, the answer is yes because the pity system exists.")
+
+    def test_answer_cleanup_leaves_code_tables_and_normal_text_alone(self):
+        text = ("Use a loop to add the numbers to the running total.\n\n```python\n"
+                "total = 0\ntotal = 0\n```\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n"
+                "Then print the final total after the loop has finished.")
+        self.assertEqual(research.dedupe_sentences(text), text)
+        self.assertEqual(research.dedupe_sentences("Short one. Another short one."), "Short one. Another short one.")
+
+    def test_answer_prompt_asks_for_each_fact_once(self):
+        prompt = research.build_answer_prompt("genshin pity", "[1] Wiki")
+        self.assertIn("Say each fact once", prompt)
+        self.assertIn("Never restate or summarise", prompt)
+        self.assertNotIn("HyperFlux adds", prompt)  # the app no longer adds a sources list
+
+
 class BridgeResearchTests(unittest.TestCase):
     def test_bridge_plan_and_sources(self):
         from hyperflux.search.bridge import create_search_bridge
@@ -300,6 +381,12 @@ class BridgeResearchTests(unittest.TestCase):
                                                timeout=5).status_code, 502)
             self.assertEqual(requests.post(base + "/research/sources", json={"question": "x", "queries": []},
                                            timeout=5).status_code, 400)
+            # tidying a long finished answer (more than the 8 KB the other routes allow)
+            long_answer = ("Primogems turn into Fates at 160 each [1]. " * 2 + "Hard pity is 90 pulls [2]. ") * 40
+            reply = requests.post(base + "/research/tidy", json={"answer": long_answer}, timeout=5)
+            self.assertEqual(reply.status_code, 200)
+            self.assertEqual(reply.json()["answer"], "Primogems turn into Fates at 160 each [1]. Hard pity is 90 pulls [2].")
+            self.assertEqual(requests.post(base + "/research/tidy", json={"answer": 5}, timeout=5).status_code, 400)
             self.assertEqual(requests.post(base + "/research/plan", data=json.dumps({"question": ""}),
                                            headers={"Content-Type": "application/json"}, timeout=5).status_code, 400)
         finally:

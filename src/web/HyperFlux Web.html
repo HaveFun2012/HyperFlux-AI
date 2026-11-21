@@ -777,6 +777,7 @@ body.style-modern .send-btn,body.style-modern .go-btn{background:var(--ac);color
   <div id="localModelSection" hidden>
     <div class="model-menu-head">Local model</div>
     <div id="localModelList" role="group" aria-label="Local model"></div>
+    <div class="model-menu-note" id="modelFitNote" hidden></div>
     <div class="model-menu-note">Switching reloads the model; only one is loaded at a time, so it uses no extra memory.</div>
   </div>
 </div>
@@ -1089,6 +1090,7 @@ var MODEL_TIERS = {
     "style": [
       "You are Flash 1, the fastest HyperFlux model. Speed and clarity matter most.",
       "Answer in one to three sentences. Use a short list only when the user asks for steps or options. Give code only when asked, and keep it minimal.",
+      "Lead with the fact, number or name the user asked for. No preamble, no restating the question, no summary at the end.",
       "Skip background, examples and caveats unless the answer would be wrong or unsafe without them.",
       "If the question really needs careful multi-step reasoning, give your best short answer and suggest switching to Apex 1 or Horizon 1."
     ]
@@ -1102,6 +1104,9 @@ var MODEL_TIERS = {
     "style": [
       "You are Apex 1, the standard HyperFlux model: a thoughtful assistant for everyday work.",
       "Answer the question in your first sentence, with no warm-up. Then add only the detail that helps.",
+      "Write like an expert who has actually done the thing: concrete specifics (numbers, names, real examples) instead of general advice, and the real trade-offs instead of a balanced-sounding list.",
+      "Have a view. When there is a choice, say which one you would pick and why, even if it depends on something: name what it depends on, then still recommend.",
+      "On hard questions, show the reasoning that matters: the key steps, the main alternative you rejected, and how sure you are. Leave out the rest.",
       "Match length to the question: a simple question gets one to three sentences; a complex one gets as much as it truly needs (working code, step-by-step maths, a requested deep dive).",
       "Write in natural, conversational prose. Use bullets, tables or headings only for steps, comparisons or reference material. Never nest bullets, and use bold rarely. Put code in code blocks.",
       "Be warm, direct and calm, like a knowledgeable friend.",
@@ -1125,6 +1130,7 @@ var MODEL_TIERS = {
       "You are Horizon 1, the HyperFlux model for complex problems: hard maths, tricky code, analysis, planning, and decisions with trade-offs.",
       "Lead with the conclusion in your first sentence, then give the reasoning a careful expert would show: the key steps, the alternatives you weighed and why you chose this one, the edge cases, and how confident you are and why.",
       "Organise long answers with short headings or numbered steps when there are several parts; keep simple parts in prose. Be complete, but never repeat yourself.",
+      "Write with craft: clear, vivid prose that carries the idea, a concrete example where it earns its place, and no padding. For creative or long-form work, give it real voice and shape rather than a summary of what could be written.",
       "If the request is ambiguous, state the most likely reading and, where it matters, briefly show how the answer changes under the other reading.",
       "For code, give complete, working code, explain the design choices that matter, and say how to test it."
     ]
@@ -1833,12 +1839,29 @@ async function loadLocalModels() {
   renderLocalModels();
 }
 
+// HyperFlux writes Gemma 4 prompts. Another model still answers, but its own chat format
+// and thinking tags are different, so say so rather than letting it look broken.
+function updateModelFitNote() {
+  var note = $('modelFitNote');
+  if (!note) return;
+  var active = (localModels.models || []).find(function(model) { return model.active; });
+  var name = active ? (active.name + ' ' + active.file) : '';
+  var family = familyFromName(name);
+  var fits = !name || family === 'gemma4' || family === 'unknown';  // say nothing about names we can't judge
+  note.hidden = fits;
+  if (!fits) {
+    note.textContent = 'Note: ' + active.name + ' is not Gemma 4. HyperFlux writes Gemma 4 prompts, ' +
+      'so other models may answer oddly or show their own tags.';
+  }
+}
+
 function renderLocalModels() {
   var section = $('localModelSection');
   var list = $('localModelList');
   if (!section || !list) return;
   // Shown when there is a choice to make (or a load in progress).
   section.hidden = !(localModels.available && (localModels.models.length > 1 || modelSwitch));
+  updateModelFitNote();
   list.textContent = '';
   localModels.models.forEach(function(model) {
     var loading = !!modelSwitch && modelSwitch.file === model.file;
@@ -1898,6 +1921,51 @@ async function switchLocalModel(path) {
 }
 
 // Called with the name KoboldCpp reports (e.g. "koboldcpp/gemma-4-E4B-it-Q4_K_M").
+// HyperFlux is written for Gemma 4, but any GGUF can be loaded. Thinking works
+// differently in each family, so adapt instead of sending Gemma's markers to everyone.
+var serverModelName = '';
+
+// A family name only when the text clearly says one. Files are often renamed (this PC's
+// Gemma 4 E4B is "model-e4b.gguf"), and KoboldCpp reports the file name, so an unfamiliar name
+// proves nothing and is treated as the Gemma 4 HyperFlux was written for.
+function familyFromName(text) {
+  var name = String(text || '').toLowerCase();
+  if (/gemma[\s_.-]*4/.test(name)) return 'gemma4';
+  if (/deepseek|\br1\b/.test(name)) return 'deepseek';  // before Qwen: R1 distills are built on Qwen
+  if (/qwen|qwq/.test(name)) return 'qwen';
+  if (/glm/.test(name)) return 'glm';
+  if (/llama|mistral|mixtral|\bphi[-_ ]?\d|granite|smollm|minicpm|olmo|nemotron|exaone|internlm|command-r|falcon|gemma[\s_.-]*[123]\b/.test(name)) return 'other';
+  return 'unknown';
+}
+
+function modelFamily() {
+  // The model list knows the real name even for a renamed file (it recognises the official
+  // Gemma 4 files by size and reads the name stored inside the GGUF), so ask it first.
+  var active = (localModels.models || []).find(function(model) { return model.active; });
+  var family = active ? familyFromName(active.name + ' ' + active.file) : 'unknown';
+  if (family === 'unknown') family = familyFromName(serverModelName);
+  return family === 'unknown' ? 'gemma4' : family;
+}
+
+// Gemma 4 thinks when the system turn opens <|think|> and the reply is prefilled with its
+// thought channel. Sending those to another model would corrupt its reply, so only Gemma
+// gets them; the others are asked in plain words instead.
+function usesGemmaThinking(thinkingExempt) {
+  return !thinkingExempt && modelFamily() === 'gemma4';
+}
+
+// Qwen and GLM stop thinking when the message ends with their own switch.
+function noThinkToken() {
+  var family = modelFamily();
+  if (family === 'qwen') return '\n/no_think';
+  if (family === 'glm') return '\n/nothink';
+  return '';
+}
+
+var ASK_TO_THINK = "Think before you answer: put your reasoning between <think> and </think>, " +
+  "then write the answer after </think>. Keep the reasoning short and the answer complete.";
+var ASK_NOT_TO_THINK = "Do not show any reasoning, working or <think> section. Reply with the answer only.";
+
 function noteServerModel(modelName) {
   if (!modelSwitch) return;
   var stem = modelSwitch.file.replace(/\.gguf$/i, '').toLowerCase();
@@ -1924,6 +1992,7 @@ async function checkServerStatus() {
     var modelName = typeof data === 'string' ? data : (
       data.result || data.model || data.name || ''
     );
+    serverModelName = modelName ? String(modelName) : '';
     noteServerModel(modelName);
     updateServerStatus(true, modelName ? String(modelName) : '');
     if (serverMaxContext === null) loadServerMaxContext();
@@ -2124,6 +2193,7 @@ function removeUnrequestedAssistantSignature(reply, prompt) {
       .test(prompt);
   if (!asksIdentity) {
     reply = reply.replace(/^\s*HyperFlux[.!:]\s*/i, '');
+    reply = reply.replace(/^\s*(?:Assistant|AI|Model|Qwen|GLM|Gemma|Llama|Mistral|DeepSeek|Granite)\s*:\s*/i, '');
     reply = reply.replace(/\n\s*HyperFlux (?:Flash|Apex|Horizon) 1\s*$/i, '');
   }
   return reply.trim();
@@ -2233,6 +2303,10 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
     thinkingExempt ? NO_THINKING_GUIDANCE
       : model.thinking === 'always' ? DEEP_THINKING_GUIDANCE : THINKING_GUIDANCE
   );
+  // A model that doesn't think on its own is asked to; one that always thinks is asked not to.
+  if (modelFamily() !== 'gemma4') {
+    systemInstruction += '\n' + (thinkingExempt ? ASK_NOT_TO_THINK : ASK_TO_THINK);
+  }
   var intent = String(intentText || prompt);
   if (REALITY_CHECK_PATTERN.test(intent)) {
     systemInstruction += '\n' + [REALITY_CHECK_HINT].concat(nameWordNotes(intent)).join('\n');
@@ -2240,13 +2314,15 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
   if (currentPicture || historyPicture >= 0) systemInstruction += '\n' + IMAGE_HONESTY_RULE;
   // Gemma 4 format. <|think|> at the top of the system turn turns on native
   // thinking; the model then writes <|channel>thought ... <channel|> before the answer.
+  var nativeThinking = usesGemmaThinking(thinkingExempt);
   var systemTurn =
-    '<|turn>system\n' + (thinkingExempt ? '' : '<|think|>\n') + systemInstruction + '<turn|>\n';
+    '<|turn>system\n' + (nativeThinking ? '<|think|>\n' : '') + systemInstruction + '<turn|>\n';
   // Gemma 4 treats <|think|> as permission, not an order, and sometimes skips
   // thinking even on Horizon. Opening the thought channel for it makes it think.
   var currentTurn =
     '<|turn>user\n' + (currentPicture ? IMAGE_PLACEHOLDER : '') + prompt + formatAttachmentContext(attachment, true) +
-    '<turn|>\n<|turn>model\n' + (thinkingExempt ? '' : THINK_PREFILL);
+    (thinkingExempt ? noThinkToken() : '') +
+    '<turn|>\n<|turn>model\n' + (nativeThinking ? THINK_PREFILL : '');
   // KoboldCpp keeps maxLength tokens free for the reply, so the prompt gets the rest.
   var promptTokens = Math.max(512, effectiveContextLength() - modelReplyBudget(modelId));
   var historyBudget = Math.max(0, promptTokens * 3 - systemTurn.length - currentTurn.length);
@@ -2819,15 +2895,24 @@ function renderMarkdown(text) {
   return restoreMath(html.join(''), mathParts);
 }
 
-// Gemma 4 native thoughts first, then older tag styles some models emit.
+// Gemma 4's native thoughts first, then the styles other models use. HyperFlux prompts
+// Gemma 4, but the model picker can load any GGUF, so Qwen, GLM, DeepSeek and friends
+// should still look right instead of showing their raw tags.
 var THOUGHT_BLOCKS = [
   /<\|channel>(?:thought)?\s*([\s\S]*?)(<channel\|>|$)/,
   /<think(?:ing)?\b[^>]*>([\s\S]*?)(<\/think(?:ing)?>|$)/i,
-  /<reasoning\b[^>]*>([\s\S]*?)(<\/reasoning\s*>|$)/i
+  /<reasoning\b[^>]*>([\s\S]*?)(<\/reasoning\s*>|$)/i,
+  /<\|?reflection\|?>([\s\S]*?)(<\/\|?reflection\|?>|$)/i
 ];
+// Tags that wrap the reply itself, or chat tokens that leak into it.
+var STRAY_TAGS = /<\|channel>|<channel\|>|<turn\|>|<\/?think(?:ing)?\b[^>]*>|<\/?reasoning\b[^>]*>|<\/?answer\s*>|<\|im_(?:start|end)\|>|<\|(?:user|assistant|system|observation)\|>|<\|start_header_id\|>|<\|end_header_id\|>|<\|begin_of_text\|>|\[gMASK\]|<sop>/gi;
+// End-of-reply tokens, removed only at the end so a code example keeping "</s>" is safe.
+var TRAILING_END = /(?:\s*(?:<\/s>|<\|endoftext\|>|<\|eot_id\|>|<\|im_end\|>|<end_of_turn>|<\|end\|>))+\s*$/i;
 
 // Mid-stream (or after Stop) the text can end with half a marker, like "<|chan".
-var STREAM_MARKERS = ['<|channel>', '<channel|>', '<|turn>', '<turn|>', '<think>', '</think>', '<reasoning>', '</reasoning>'];
+var STREAM_MARKERS = ['<|channel>', '<channel|>', '<|turn>', '<turn|>', '<think>', '</think>',
+  '<reasoning>', '</reasoning>', '<answer>', '</answer>', '<|im_end|>', '<|im_start|>', '<|endoftext|>',
+  '<|eot_id|>', '<end_of_turn>'];
 function trimPartialMarker(text) {
   for (var i = 0; i < STREAM_MARKERS.length; i++) {
     for (var k = STREAM_MARKERS[i].length - 1; k >= 2; k--) {
@@ -2849,10 +2934,7 @@ function splitAssistantResponse(text, allowReasoning) {
       response = response.slice(0, match.index) + response.slice(match.index + match[0].length);
     }
   });
-  response = trimPartialMarker(response
-    .replace(/<\|channel>|<channel\|>|<turn\|>|<\/?think(?:ing)?\b[^>]*>|<\/?reasoning\b[^>]*>/gi, '')
-    .trimEnd())
-    .trim();
+  response = trimPartialMarker(response.replace(TRAILING_END, '').replace(STRAY_TAGS, '').trimEnd()).trim();
   return {
     reasoning: allowReasoning ? thoughts.join('\n\n') : '',
     answer: response,
@@ -3296,6 +3378,26 @@ async function startResearch(prompt, statusNode, signal, previous) {
 
 // Some answers end with their own "Sources" list even though the prompt says not to.
 // HyperFlux adds the real one from the pages it read, so drop the model's copy.
+// Merges sentences the model said twice (keeping every citation). The work is done by the
+// bridge (hyperflux/search/research.py); if it can't be reached the answer is left as written.
+async function tidyAnswer(text) {
+  var controller = new AbortController();
+  var timer = setTimeout(function() { controller.abort(); }, 4000);
+  try {
+    var response = await fetch('http://127.0.0.1:5002/research/tidy', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({answer: text}), signal: controller.signal
+    });
+    if (!response.ok) return text;
+    var data = await response.json();
+    return typeof data.answer === 'string' && data.answer.trim() ? data.answer : text;
+  } catch (error) {
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function stripModelSources(text) {
   var cleaned = String(text || '')
     .replace(/\n*<end>\s*$/i, '')
@@ -4204,8 +4306,12 @@ var HF = (function(){
           max_length: modelReplyBudget(requestModel),
           temperature: modelSettings.temperature,
           top_p: 0.95,
-          // A high repetition penalty punishes reasoning, which reuses numbers and terms.
-          rep_penalty: 1.05,
+          // KoboldCpp reads "rep_pen" (it ignores "rep_penalty", which is what this used to send, so no
+          // penalty was ever applied). Mild by default because a high one punishes reasoning, which
+          // reuses numbers and terms; firmer for answers written from web sources, where repeating
+          // what the pages already repeat is the usual failure.
+          rep_pen: (research && thinkingExempt) ? 1.12 : 1.05,
+          rep_pen_range: 512,
           stop_sequence: ['<turn|>', '<|turn>']
         };
         if (hasPicture(attachment) && !visionReady) {
@@ -4213,7 +4319,7 @@ var HF = (function(){
         }
         if (promptImage) generationPayload.images = [promptImage.image.split(',')[1]];
         // The prompt already opened the thought channel, so the reply starts inside it.
-        var reply = thinkingExempt ? '' : THINK_PREFILL;
+        var reply = usesGemmaThinking(thinkingExempt) ? THINK_PREFILL : '';
         var replyPrefixLength = reply.length;
         var thoughtSeconds = null;
         var finishReason = null;
@@ -4308,8 +4414,9 @@ var HF = (function(){
         modelPrompt = research.prompt;
         }
         if (research) {
-          reply = stripModelSources(reply);
-          // Inline citations remain in the answer. The separate Sources list is omitted.
+          reply = await tidyAnswer(stripModelSources(reply));
+          // Inline citations stay in the answer. HyperFlux intentionally does not append
+          // a separate Sources section, because the model and UI can disagree on rounding.
         }
 
         var finalContentNode = document.getElementById('content-' + aiRowId);

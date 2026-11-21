@@ -174,8 +174,9 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(403, {"error": "Host not allowed."})
             return
         route = urlsplit(self.path).path
-        if route not in ("/search", "/research/plan", "/research/sources", "/local-models/switch",
-                         "/vision/install", "/update/install", "/update/skip", "/update/prompted"):
+        if route not in ("/search", "/research/plan", "/research/sources", "/research/tidy",
+                         "/local-models/switch", "/vision/install", "/update/install", "/update/skip",
+                         "/update/prompted"):
             self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
@@ -247,14 +248,22 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = -1
-        if not 1 <= length <= 8192:
+        limit = 65536 if route == "/research/tidy" else 8192  # a finished answer is longer than a question
+        if not 1 <= length <= limit:
             self._discard_body()
-            self._send_json(413, {"error": "Request must be between 1 and 8192 bytes."})
+            self._send_json(413, {"error": f"Request must be between 1 and {limit} bytes."})
             return
         try:
             data = json.loads(self.rfile.read(length).decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             self._send_json(400, {"error": "Request body must be valid JSON."})
+            return
+        if route == "/research/tidy":
+            answer = data.get("answer") if isinstance(data, dict) else None
+            if not isinstance(answer, str):
+                self._send_json(400, {"error": "Give the answer text."})
+                return
+            self._send_json(200, {"answer": research.dedupe_sentences(answer)})
             return
         question = data.get("question") if isinstance(data, dict) else None
         if not isinstance(question, str) or not question.strip() or len(question) > 4000:
