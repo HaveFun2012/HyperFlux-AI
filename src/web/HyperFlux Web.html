@@ -394,6 +394,46 @@ body.hf-generating .msg-actions{display:none}
 .setting-row .check-row{display:flex;align-items:center;gap:8px;cursor:pointer}
 .setting-row .check-row input{width:auto;padding:0;accent-color:var(--ac)}
 .setting-hint{font-size:11px;color:var(--t3)}
+.settings-modal{max-width:780px;width:94%;height:min(660px,calc(100vh - 40px));padding:0;display:flex;flex-direction:column;overflow:hidden}
+.settings-head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 12px;border-bottom:1px solid var(--gb)}
+.settings-head h3{margin:0}
+.settings-body{display:flex;min-height:0;flex:1}  /* fixed window height: switching tabs never makes it jump */
+.settings-panel .setting-row input[type="color"]{width:72px;height:38px}
+.settings-tabs{flex:0 0 188px;display:flex;flex-direction:column;gap:4px;padding:12px 10px;border-right:1px solid var(--gb);overflow-y:auto}
+.settings-tab{display:flex;align-items:center;gap:10px;padding:10px 12px;border:0;border-radius:10px;background:none;color:var(--t2);font:600 13px var(--font);text-align:left;cursor:pointer}
+.settings-tab i{width:16px;text-align:center;color:var(--t3)}
+.settings-tab:hover{background:var(--soft);color:var(--t1)}
+.settings-tab[aria-selected="true"]{background:var(--acbg);color:var(--t1);box-shadow:inset 0 0 0 1px var(--acbr)}
+.settings-tab[aria-selected="true"] i{color:var(--ac3)}
+.settings-tab:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.settings-panel{flex:1;min-width:0;padding:8px 24px 18px;overflow-y:auto}
+.settings-panel[hidden]{display:none}
+.settings-panel h4{font:700 14px var(--font);margin:16px 0 2px;color:var(--t1)}
+.panel-sub{font-size:12px;color:var(--t3);margin:0 0 6px;line-height:1.5}
+.settings-panel .setting-row{margin:12px 0}
+.setting-value{font:600 12px var(--mono);color:var(--ac3);margin-left:4px}
+.setting-row input[type="range"]{padding:0;border:0;background:none;box-shadow:none;accent-color:var(--ac);height:28px}
+.range-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--t3);margin-top:-4px}
+.inline-row{display:flex;gap:8px;align-items:center}
+.inline-row select{flex:1}
+.link-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:var(--r3);border:1px solid var(--gb2);background:var(--g1);color:var(--t1);font:600 12px var(--font);cursor:pointer;white-space:nowrap}
+.link-btn:hover{border-color:var(--acbr);color:var(--ac3)}
+.danger-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:var(--r3);border:1px solid rgba(239,68,68,.45);background:rgba(239,68,68,.1);color:var(--er3);font:600 12px var(--font);cursor:pointer}
+.danger-btn:hover{background:rgba(239,68,68,.18)}
+.about-list{display:grid;gap:8px;margin:10px 0 14px;font-size:13px}
+.about-list div{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;border-radius:var(--r3);background:var(--g1);border:1px solid var(--gb)}
+.about-list span:first-child{color:var(--t3)}
+.settings-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:14px 24px;border-top:1px solid var(--gb)}
+.settings-foot .foot-note{margin-right:auto;font-size:12px;color:var(--t3)}
+.settings-foot .foot-note.error{color:var(--er3)}
+.settings-foot button{padding:9px 16px;border-radius:var(--r3);border:1px solid var(--gb2);background:var(--gs);color:var(--t1);font:600 12px var(--font);cursor:pointer}
+.settings-foot .save-settings{background:var(--grad);border:0;color:#fff}
+@media(max-width:720px){
+  .settings-body{flex-direction:column}
+  .settings-tabs{flex:none;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--gb);padding:8px}
+  .settings-tab{white-space:nowrap}
+  .settings-panel{padding:4px 16px 16px}
+}
 .setting-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
 .setting-actions button{padding:9px 14px;border-radius:var(--r3);border:1px solid var(--gb2);background:var(--gs);color:var(--t1);font:600 12px var(--font);cursor:pointer}
 .setting-actions .save-settings{background:var(--grad);border:0}
@@ -456,8 +496,8 @@ body.hf-generating .msg-actions{display:none}
           <button type="button" class="primary" id="updateCardInstall" onclick="HF.installUpdate()">Update now</button>
         </div>
       </div>
-      <button class="sf-btn" onclick="HF.openThemes()"><i class="fas fa-palette"></i><span>Themes & Aesthetics</span></button>
-      <button class="sf-btn" onclick="HF.openSettings()"><i class="fas fa-sliders"></i><span>Model Settings</span></button>
+      <button class="sf-btn" onclick="HF.openSettings('appearance')"><i class="fas fa-palette"></i><span>Appearance</span></button>
+      <button class="sf-btn" onclick="HF.openSettings()"><i class="fas fa-gear"></i><span>Settings</span></button>
       <button class="sf-btn" onclick="HF.clearAllChats()"><i class="fas fa-trash-can"></i><span>Clear All History</span></button>
     </div>
   </aside>
@@ -470,7 +510,7 @@ body.hf-generating .msg-actions{display:none}
       </div>
       <div class="topbar-actions">
         <button class="server-log-btn" type="button" onclick="HF.openServerLogs()" aria-haspopup="dialog"><i class="fas fa-terminal" aria-hidden="true"></i> Server logs</button>
-        <button class="settings-btn" onclick="HF.openSettings()"><i class="fas fa-sliders"></i> Settings</button>
+        <button class="settings-btn" onclick="HF.openSettings()"><i class="fas fa-gear"></i> Settings</button>
       </div>
     </header>
 
@@ -555,91 +595,137 @@ body.hf-generating .msg-actions{display:none}
 
 <input type="file" id="readFileInput" accept=".txt,.py,.js,.ts,.html,.css,.json,.md,.log,.yaml,.yml,.toml,.ini,.bat,.ps1,.c,.cpp,.h,.java,.rs,.go,.sql,.png,.jpg,.jpeg,.webp,.gif,.bmp" hidden onchange="HF.onFileSelected(this)">
 
-<!-- Theme Modal -->
-<div class="ovl" id="themeOvl" onclick="if(event.target===this)HF.closeThemes()">
-  <div class="modal" role="dialog" aria-labelledby="themeTitle">
-    <h3 id="themeTitle">Themes</h3>
-    <p class="modal-sub">Changes apply right away and are saved on this device.</p>
-    <div class="theme-section-label">Mode</div>
-    <div class="mode-switch" role="group" aria-label="Mode">
-      <button class="mode-opt" type="button" data-mode="dark" aria-pressed="false" onclick="HF.setThemeMode('dark')">Dark</button>
-      <button class="mode-opt" type="button" data-mode="light" aria-pressed="false" onclick="HF.setThemeMode('light')">Light</button>
-      <button class="mode-opt" type="button" data-mode="system" aria-pressed="false" onclick="HF.setThemeMode('system')">Match system</button>
-    </div>
-    <div class="theme-section-label">Colour</div>
-    <div class="theme-grid">
-      <button class="theme-opt" type="button" data-family="arch" aria-pressed="false" onclick="HF.setThemeFamily('arch')"><span class="theme-swatch" style="background:linear-gradient(135deg,#0077b6,#00b4d8)" aria-hidden="true"></span><span class="theme-name">Arch Cyan</span><span class="theme-desc">Cool ocean blue</span></button>
-      <button class="theme-opt" type="button" data-family="obsidian" aria-pressed="false" onclick="HF.setThemeFamily('obsidian')"><span class="theme-swatch" style="background:linear-gradient(135deg,#27272a,#a1a1aa)" aria-hidden="true"></span><span class="theme-name">Obsidian</span><span class="theme-desc">Neutral graphite</span></button>
-      <button class="theme-opt" type="button" data-family="cyberpunk" aria-pressed="false" onclick="HF.setThemeFamily('cyberpunk')"><span class="theme-swatch" style="background:linear-gradient(135deg,#7209b7,#f72585)" aria-hidden="true"></span><span class="theme-name">Cyberpunk</span><span class="theme-desc">Neon pink and purple</span></button>
-      <button class="theme-opt" type="button" data-family="emerald" aria-pressed="false" onclick="HF.setThemeFamily('emerald')"><span class="theme-swatch" style="background:linear-gradient(135deg,#047857,#10b981)" aria-hidden="true"></span><span class="theme-name">Emerald</span><span class="theme-desc">Calm green</span></button>
-      <button class="theme-opt" type="button" data-family="violet" aria-pressed="false" onclick="HF.setThemeFamily('violet')"><span class="theme-swatch" style="background:linear-gradient(135deg,#6d28d9,#a78bfa)" aria-hidden="true"></span><span class="theme-name">Violet</span><span class="theme-desc">Soft lavender</span></button>
-      <button class="theme-opt" type="button" data-family="amber" aria-pressed="false" onclick="HF.setThemeFamily('amber')"><span class="theme-swatch" style="background:linear-gradient(135deg,#b45309,#f59e0b)" aria-hidden="true"></span><span class="theme-name">Amber</span><span class="theme-desc">Warm gold</span></button>
-    </div>
-    <p class="theme-note" id="themeAccentNote" hidden>A custom accent colour is set in Settings, so it replaces each theme's colour.
-      <button class="theme-note-btn" type="button" onclick="HF.clearAccent()">Use theme colours</button></p>
-    <div class="setting-actions"><button class="save-settings" type="button" onclick="HF.closeThemes()">Done</button></div>
-  </div>
-</div>
-
 <div class="ovl" id="settingsOvl" onclick="if(event.target===this)HF.closeSettings()">
-  <div class="modal">
-    <h3>Model Settings</h3>
-    <div class="modal-sub">Applied to your local KoboldCPP requests and saved in this browser.</div>
-    <div class="setting-row">
-      <label for="temperatureSetting">Temperature <span id="temperatureValue"></span></label>
-      <input id="temperatureSetting" type="number" min="0" max="2" step="0.05">
+  <section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-head">
+      <h3 id="settingsTitle">Settings</h3>
+      <button class="logs-close" type="button" aria-label="Close settings" onclick="HF.closeSettings()"><i class="fas fa-xmark" aria-hidden="true"></i></button>
     </div>
-    <div class="setting-row">
-      <label for="lengthSetting">Maximum output tokens</label>
-      <input id="lengthSetting" type="number" min="1" max="6144" step="1">
+    <div class="settings-body">
+      <nav class="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button class="settings-tab" type="button" role="tab" data-tab="personal" onclick="HF.showSettingsTab('personal')"><i class="fas fa-user" aria-hidden="true"></i><span>Personal</span></button>
+        <button class="settings-tab" type="button" role="tab" data-tab="model" onclick="HF.showSettingsTab('model')"><i class="fas fa-sliders" aria-hidden="true"></i><span>Model</span></button>
+        <button class="settings-tab" type="button" role="tab" data-tab="appearance" onclick="HF.showSettingsTab('appearance')"><i class="fas fa-palette" aria-hidden="true"></i><span>Appearance</span></button>
+        <button class="settings-tab" type="button" role="tab" data-tab="media" onclick="HF.showSettingsTab('media')"><i class="fas fa-image" aria-hidden="true"></i><span>Voice &amp; pictures</span></button>
+        <button class="settings-tab" type="button" role="tab" data-tab="about" onclick="HF.showSettingsTab('about')"><i class="fas fa-circle-info" aria-hidden="true"></i><span>About</span></button>
+      </nav>
+
+      <div class="settings-panel" role="tabpanel" data-panel="personal">
+        <h4>About you</h4>
+        <p class="panel-sub">Helps HyperFlux answer in a way that suits you.</p>
+        <div class="setting-row">
+          <label for="displayNameSetting">Your name</label>
+          <input id="displayNameSetting" type="text" maxlength="32" placeholder="Shown in the greeting on the home page">
+        </div>
+        <div class="setting-row">
+          <label for="customInstructionsSetting">Custom instructions</label>
+          <textarea id="customInstructionsSetting" rows="5" maxlength="1500" placeholder="For example: I'm a student in Malaysia. Keep answers simple and use RM for prices."></textarea>
+          <span class="setting-hint">Sent with every message, so you never have to repeat yourself. Up to 1,500 characters.</span>
+        </div>
+        <h4>Answer style</h4>
+        <div class="setting-row">
+          <label for="personaSetting">Persona</label>
+          <select id="personaSetting"><option value="default">Default: HyperFlux's normal style.</option><option value="tutor">Tutor: Teaches step by step and checks you understood.</option><option value="coder">Coder: Code first, short practical explanations.</option><option value="concise">Concise: As short as possible.</option><option value="friendly">Friendly: Casual and encouraging.</option></select>
+          <span class="setting-hint">Changes HyperFlux's tone. You can also type <code>/persona</code> in a chat.</span>
+        </div>
+      </div>
+
+      <div class="settings-panel" role="tabpanel" data-panel="model" hidden>
+        <h4>How the model writes</h4>
+        <p class="panel-sub">These apply to your local model (KoboldCpp) on this PC.</p>
+        <div class="setting-row">
+          <label for="temperatureSetting">Creativity (temperature) <span class="setting-value" id="temperatureValue"></span></label>
+          <input id="temperatureSetting" type="range" min="0" max="2" step="0.05" oninput="updateTemperatureLabel()">
+          <div class="range-ends"><span>Focused</span><span>Creative</span></div>
+          <span class="setting-hint">0.7 suits most chats. Lower gives steadier, more predictable answers; higher gives more varied ones.</span>
+        </div>
+        <h4>Length and memory</h4>
+        <div class="setting-row">
+          <label for="lengthSetting">Longest answer (tokens)</label>
+          <input id="lengthSetting" type="number" min="1" max="6144" step="1">
+          <span class="setting-hint">A token is about three quarters of a word. Thinking counts too. 4,096 is plenty for most answers.</span>
+        </div>
+        <div class="setting-row">
+          <label for="contextSetting">Conversation memory (tokens)</label>
+          <input id="contextSetting" type="number" min="1024" max="16384" step="1">
+          <span class="setting-hint" id="contextHint">How much of the chat HyperFlux can see at once. More remembers further back but is slower.</span>
+        </div>
+        <button class="link-btn" type="button" onclick="HF.resetModelSettings()"><i class="fas fa-rotate-left" aria-hidden="true"></i> Reset to recommended</button>
+      </div>
+
+      <div class="settings-panel" role="tabpanel" data-panel="appearance" hidden>
+        <h4>Theme</h4>
+        <p class="panel-sub">Theme and mode change right away.</p>
+        <div class="theme-section-label">Mode</div>
+        <div class="mode-switch" role="group" aria-label="Mode">
+          <button class="mode-opt" type="button" data-mode="dark" aria-pressed="false" onclick="HF.setThemeMode('dark')">Dark</button>
+          <button class="mode-opt" type="button" data-mode="light" aria-pressed="false" onclick="HF.setThemeMode('light')">Light</button>
+          <button class="mode-opt" type="button" data-mode="system" aria-pressed="false" onclick="HF.setThemeMode('system')">Match system</button>
+        </div>
+        <div class="theme-section-label">Colour</div>
+        <div class="theme-grid">
+          <button class="theme-opt" type="button" data-family="arch" aria-pressed="false" onclick="HF.setThemeFamily('arch')"><span class="theme-swatch" style="background:linear-gradient(135deg,#0077b6,#00b4d8)" aria-hidden="true"></span><span class="theme-name">Arch Cyan</span><span class="theme-desc">Cool ocean blue</span></button>
+          <button class="theme-opt" type="button" data-family="obsidian" aria-pressed="false" onclick="HF.setThemeFamily('obsidian')"><span class="theme-swatch" style="background:linear-gradient(135deg,#27272a,#a1a1aa)" aria-hidden="true"></span><span class="theme-name">Obsidian</span><span class="theme-desc">Neutral graphite</span></button>
+          <button class="theme-opt" type="button" data-family="cyberpunk" aria-pressed="false" onclick="HF.setThemeFamily('cyberpunk')"><span class="theme-swatch" style="background:linear-gradient(135deg,#7209b7,#f72585)" aria-hidden="true"></span><span class="theme-name">Cyberpunk</span><span class="theme-desc">Neon pink and purple</span></button>
+          <button class="theme-opt" type="button" data-family="emerald" aria-pressed="false" onclick="HF.setThemeFamily('emerald')"><span class="theme-swatch" style="background:linear-gradient(135deg,#047857,#10b981)" aria-hidden="true"></span><span class="theme-name">Emerald</span><span class="theme-desc">Calm green</span></button>
+          <button class="theme-opt" type="button" data-family="violet" aria-pressed="false" onclick="HF.setThemeFamily('violet')"><span class="theme-swatch" style="background:linear-gradient(135deg,#6d28d9,#a78bfa)" aria-hidden="true"></span><span class="theme-name">Violet</span><span class="theme-desc">Soft lavender</span></button>
+          <button class="theme-opt" type="button" data-family="amber" aria-pressed="false" onclick="HF.setThemeFamily('amber')"><span class="theme-swatch" style="background:linear-gradient(135deg,#b45309,#f59e0b)" aria-hidden="true"></span><span class="theme-name">Amber</span><span class="theme-desc">Warm gold</span></button>
+        </div>
+        <p class="theme-note" id="themeAccentNote" hidden>A custom accent colour is on, so it replaces each theme's colour.
+          <button class="theme-note-btn" type="button" onclick="HF.clearAccent()">Use theme colours</button></p>
+        <h4>Details</h4>
+        <div class="setting-row">
+          <label class="check-row"><input id="accentCustomSetting" type="checkbox" onchange="document.getElementById('accentSetting').disabled = !this.checked"> Use my own accent colour</label>
+          <input id="accentSetting" type="color" value="#00b4d8" aria-label="Custom accent colour">
+          <span class="setting-hint">When off, each theme uses its own colours.</span>
+        </div>
+        <div class="setting-row">
+          <label for="textSizeSetting">Chat text size</label>
+          <select id="textSizeSetting">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-panel" role="tabpanel" data-panel="media" hidden>
+        <h4>Read aloud</h4>
+        <p class="panel-sub">The voice used by the Read aloud button under each answer.</p>
+        <div class="setting-row">
+          <label for="voiceSetting">Voice</label>
+          <div class="inline-row">
+            <select id="voiceSetting"><option value="">System default</option></select>
+            <button class="link-btn" type="button" onclick="HF.playVoiceSample()"><i class="fas fa-volume-high" aria-hidden="true"></i> Play</button>
+          </div>
+          <span class="setting-hint">Uses the voices installed in Windows. More can be added in Windows Settings &gt; Time &amp; language &gt; Speech.</span>
+        </div>
+        <h4>Image input</h4>
+        <div class="setting-row">
+          <span class="setting-hint" id="visionStatus">Checking...</span>
+          <button class="vision-btn" id="visionButton" type="button" onclick="HF.enableVision()" hidden>Enable image input</button>
+        </div>
+      </div>
+
+      <div class="settings-panel" role="tabpanel" data-panel="about" hidden>
+        <h4 id="aboutVersion">HyperFlux</h4>
+        <p class="panel-sub" id="aboutUpdate">A private AI assistant that runs on your own PC.</p>
+        <div class="about-list">
+          <div><span>Server</span><span id="aboutServer">Checking...</span></div>
+          <div><span>Saved chats</span><span id="aboutChats">0</span></div>
+        </div>
+        <button class="link-btn" type="button" onclick="HF.closeSettings(); HF.openServerLogs()"><i class="fas fa-terminal" aria-hidden="true"></i> Show server logs</button>
+        <h4>Your data</h4>
+        <p class="panel-sub">Chats and settings are kept on this PC only. To save a chat, use the download icon next to it.</p>
+        <button class="danger-btn" type="button" onclick="HF.clearAllChats()"><i class="fas fa-trash-can" aria-hidden="true"></i> Delete all chats</button>
+      </div>
     </div>
-    <div class="setting-row">
-      <label for="contextSetting">Context window tokens</label>
-      <input id="contextSetting" type="number" min="1024" max="16384" step="1">
+    <div class="settings-foot">
+      <span class="foot-note" id="settingsNote" role="status"></span>
+      <button type="button" onclick="HF.closeSettings()">Cancel</button>
+      <button type="button" class="save-settings" onclick="HF.saveAllSettings()">Save</button>
     </div>
-    <h3>Personalization</h3>
-    <div class="setting-row">
-      <label for="displayNameSetting">Name for your greeting</label>
-      <input id="displayNameSetting" type="text" maxlength="32" placeholder="There">
-    </div>
-    <div class="setting-row">
-      <label class="check-row"><input id="accentCustomSetting" type="checkbox" onchange="document.getElementById('accentSetting').disabled = !this.checked"> Use a custom accent colour</label>
-      <input id="accentSetting" type="color" value="#00b4d8" aria-label="Custom accent colour">
-      <span class="setting-hint">When off, each theme uses its own colours.</span>
-    </div>
-    <div class="setting-row">
-      <label for="textSizeSetting">Chat text size</label>
-      <select id="textSizeSetting">
-        <option value="small">Small</option>
-        <option value="medium">Medium</option>
-        <option value="large">Large</option>
-      </select>
-    </div>
-    <div class="setting-row">
-      <label for="personaSetting">Persona</label>
-      <select id="personaSetting"><option value="default">Default: HyperFlux's normal style.</option><option value="tutor">Tutor: Teaches step by step and checks you understood.</option><option value="coder">Coder: Code first, short practical explanations.</option><option value="concise">Concise: As short as possible.</option><option value="friendly">Friendly: Casual and encouraging.</option></select>
-      <span class="setting-hint">Changes HyperFlux's tone. You can also type /persona in a chat.</span>
-    </div>
-    <div class="setting-row">
-      <label for="customInstructionsSetting">Custom instructions</label>
-      <textarea id="customInstructionsSetting" rows="4" maxlength="1500" placeholder="For example: I'm a student in Malaysia. Keep answers simple and use RM for prices."></textarea>
-      <span class="setting-hint">Sent with every message so HyperFlux knows about you. Up to 1,500 characters.</span>
-    </div>
-    <div class="setting-row">
-      <label for="voiceSetting">Read-aloud voice</label>
-      <select id="voiceSetting"><option value="">System default</option></select>
-    </div>
-    <h3>Image input</h3>
-    <div class="setting-row">
-      <span class="setting-hint" id="visionStatus">Checking...</span>
-      <button class="vision-btn" id="visionButton" type="button" onclick="HF.enableVision()" hidden>Enable image input</button>
-    </div>
-    <div class="setting-actions">
-      <button onclick="HF.closeSettings()">Cancel</button>
-      <button onclick="HF.savePersonalization()">Save personalization</button>
-      <button class="save-settings" onclick="HF.saveSettings()">Save settings</button>
-    </div>
-  </div>
+  </section>
 </div>
 
 <div class="ovl" id="cropOvl">
@@ -1139,6 +1225,19 @@ var personalization = loadPersonalization();
 var currentReleaseIndex = 0;
 var releaseNotes = [
   {
+    title: 'New in HyperFlux 1.2',
+    badge: 'Settings',
+    footer: 'HYPERFLUX 1.2 \u00b7 SETTINGS',
+    features: [
+      'A tidier Settings window: Personal, Model, Appearance, Voice & pictures and About.',
+      'One Save button saves everything (no more saving half by mistake).',
+      'Model settings in plain words: a Focused-to-Creative slider and a Reset button.',
+      'Themes, accent colour and text size together under Appearance.',
+      'Try a read-aloud voice with the Play button before choosing it.',
+      'Deleting all chats now asks first.'
+    ]
+  },
+  {
     title: 'New in this update',
     badge: 'Pictures · Voice · Personas',
     footer: 'HYPERFLUX · NEW FEATURES',
@@ -1191,8 +1290,9 @@ var featureDemos = [
   {
     title: 'Tell HyperFlux about you',
     description: 'Custom instructions and personas shape every answer, so you never repeat yourself.',
-    actionLabel: 'Open personalization',
-    action: 'settings'
+    actionLabel: 'Open personal settings',
+    action: 'settings',
+    tab: 'personal'
   },
   {
     title: 'Show it a picture',
@@ -1253,7 +1353,8 @@ var featureDemos = [
     title: 'Tune your local model',
     description: 'Adjust temperature, context size, and response length on this PC.',
     actionLabel: 'Open model settings',
-    action: 'settings'
+    action: 'settings',
+    tab: 'model'
   }
 ];
 
@@ -1695,6 +1796,9 @@ document.addEventListener('keydown', function(event) {
   if (event.key === 'Escape' && $('serverLogsOvl').classList.contains('vis')) {
     closeServerLogs();
   }
+  if (event.key === 'Escape' && $('settingsOvl').classList.contains('vis')) {
+    HF.closeSettings();
+  }
   if (event.key === 'Escape' && $('updateOvl').classList.contains('vis')) {
     HF.updateLater();
   }
@@ -1703,9 +1807,60 @@ document.addEventListener('keydown', function(event) {
 function refreshSettingsForm() {
   if (!$('temperatureSetting')) return;
   $('temperatureSetting').value = modelSettings.temperature;
-  $('temperatureValue').textContent = '(' + Number(modelSettings.temperature).toFixed(2) + ')';
   $('lengthSetting').value = modelSettings.maxLength;
   $('contextSetting').value = modelSettings.contextLength;
+  updateTemperatureLabel();
+  $('contextHint').textContent = 'How much of the chat HyperFlux can see at once. More remembers further back but is slower.' +
+    (serverMaxContext ? ' Your server allows up to ' + serverMaxContext.toLocaleString() + '.' : '');
+}
+
+function updateTemperatureLabel() {
+  var value = Number($('temperatureSetting').value);
+  var word = value < 0.4 ? 'focused' : value <= 1 ? 'balanced' : 'creative';
+  $('temperatureValue').textContent = value.toFixed(2) + ' \u00b7 ' + word;
+}
+
+// ---- Settings window: one window, a tab per area, one Save ---------------------------------
+var SETTINGS_TABS = ['personal', 'model', 'appearance', 'media', 'about'];
+var settingsTab = (function() {
+  try {
+    var saved = localStorage.getItem('hfx_settings_tab');
+    return SETTINGS_TABS.indexOf(saved) >= 0 ? saved : 'personal';
+  } catch (error) { return 'personal'; }
+})();
+
+function showSettingsTab(name) {
+  if (SETTINGS_TABS.indexOf(name) < 0) name = 'personal';
+  settingsTab = name;
+  try { localStorage.setItem('hfx_settings_tab', name); } catch (error) {}
+  document.querySelectorAll('.settings-tab').forEach(function(tab) {
+    var on = tab.dataset.tab === name;
+    tab.setAttribute('aria-selected', on ? 'true' : 'false');
+    tab.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll('.settings-panel').forEach(function(panel) {
+    panel.hidden = panel.dataset.panel !== name;
+  });
+  if (name === 'about') refreshAboutPanel();
+  if (name === 'media') refreshVisionSetup();
+}
+
+function setSettingsNote(text, isError) {
+  var note = $('settingsNote');
+  if (!note) return;
+  note.textContent = text || '';
+  note.classList.toggle('error', !!isError);
+}
+
+function refreshAboutPanel() {
+  var info = updateInfo || {};
+  $('aboutVersion').textContent = 'HyperFlux' + (info.current ? ' ' + info.current : '');
+  $('aboutUpdate').textContent = info.available
+    ? 'Version ' + info.version + ' is ready to install. Use the card in the sidebar.'
+    : info.current ? 'You have the latest version.' : 'A private AI assistant that runs on your own PC.';
+  $('aboutServer').textContent = serverConnected ? 'Connected (localhost:5001)' : 'Not connected';
+  var count = sessions.length;
+  $('aboutChats').textContent = count + (count === 1 ? ' chat' : ' chats');
 }
 
 function refreshPersonalizationForm() {
@@ -2566,7 +2721,7 @@ function executeLocalCommand(command) {
       '',
       'Questions asking for current or latest information are also searched automatically. Start Start_HyperFlux_Server.bat to enable local web search.',
       '',
-      'Type `/` to see these commands as you type. Attach a picture with the paperclip once image input is on (Settings > Image input).'
+      'Type `/` to see these commands as you type. Attach a picture with the paperclip once image input is on (Settings > Voice & pictures).'
     ].join('\n');
   }
 
@@ -2831,7 +2986,7 @@ function showUpdateModal() {
 
 // ---- Image input ----------------------------------------------------------------------
 // KoboldCpp can see pictures only when it was started with the model's vision file
-// (--mmproj). The desktop app downloads that file once (Settings > Image input).
+// (--mmproj). The desktop app downloads that file once (Settings > Voice & pictures).
 var visionReady = false;
 var visionSetup = null;
 var visionPollTimer = null;
@@ -2907,8 +3062,8 @@ function isImageFile(file) {
 // send and small enough to keep in the saved chat.
 async function attachImage(file) {
   if (!(await refreshVisionStatus())) {
-    window.alert('Image input is off. Turn it on in Settings > Image input (a one-time download).');
-    HF.openSettings();
+    window.alert('Image input is off. Turn it on in Settings > Voice & pictures (a one-time download).');
+    HF.openSettings('media');
     return;
   }
   if (file.size > 25 * 1024 * 1024) {
@@ -3202,7 +3357,7 @@ var HF = (function(){
       if (demo.action === 'themes') {
         this.openThemes();
       } else if (demo.action === 'settings') {
-        this.openSettings();
+        this.openSettings(demo.tab);
       } else if (demo.action === 'file') {
         this.pickFile('Review this file and explain the important parts.');
       } else if (demo.action === 'models') {
@@ -3216,14 +3371,78 @@ var HF = (function(){
       }
     },
     clearAllChats: function(){
+      if (!sessions.length) { window.alert('There are no saved chats.'); return; }
+      if (!window.confirm('Delete all ' + sessions.length + ' saved chats? This can\'t be undone.')) return;
       sessions = [];
       saveSessions();
       HF.newChat();
     },
-    openThemes: function(){ refreshThemePicker(); $('themeOvl').classList.add('vis'); },
-    closeThemes: function(){ $('themeOvl').classList.remove('vis'); },
-    openSettings: function(){ refreshSettingsForm(); refreshPersonalizationForm(); $('settingsOvl').classList.add('vis'); refreshVisionSetup(); },
-    closeSettings: function(){ $('settingsOvl').classList.remove('vis'); },
+    openThemes: function(){ this.openSettings('appearance'); },
+    closeThemes: function(){ this.closeSettings(); },
+    openSettings: function(tab){
+      refreshSettingsForm();
+      refreshPersonalizationForm();
+      refreshThemePicker();
+      setSettingsNote('');
+      showSettingsTab(typeof tab === 'string' ? tab : settingsTab);
+      $('settingsOvl').classList.add('vis');
+      refreshVisionSetup();
+    },
+    closeSettings: function(){
+      stopSpeech();
+      $('settingsOvl').classList.remove('vis');
+    },
+    showSettingsTab: showSettingsTab,
+    resetModelSettings: function(){
+      $('temperatureSetting').value = 0.7;
+      $('lengthSetting').value = 4096;
+      $('contextSetting').value = Math.min(16384, serverMaxContext || 16384);
+      updateTemperatureLabel();
+      setSettingsNote('Recommended values set. Click Save to keep them.');
+    },
+    playVoiceSample: function(){
+      if (!('speechSynthesis' in window)) return;
+      speechSynthesis.cancel();
+      var utterance = new SpeechSynthesisUtterance("Hi, I'm HyperFlux. This is how I'll read your answers.");
+      var voice = speechSynthesis.getVoices().find(function(v) { return v.name === $('voiceSetting').value; });
+      if (voice) utterance.voice = voice;
+      speechSynthesis.speak(utterance);
+    },
+    // Saves every tab at once. Problems are shown next to the buttons, on the right tab.
+    saveAllSettings: function(){
+      var temperature = Number($('temperatureSetting').value);
+      var maxLength = $('lengthSetting').valueAsNumber;
+      var contextLength = $('contextSetting').valueAsNumber;
+      var problem = '';
+      if (!Number.isInteger(maxLength) || maxLength < 1 || maxLength > MAX_OUTPUT_TOKENS) {
+        problem = 'Longest answer must be a whole number from 1 to ' + MAX_OUTPUT_TOKENS.toLocaleString() + '.';
+      } else if (!Number.isInteger(contextLength) || contextLength < MIN_CONTEXT_TOKENS || contextLength > MAX_CONTEXT_TOKENS) {
+        problem = 'Conversation memory must be from ' + MIN_CONTEXT_TOKENS.toLocaleString() + ' to ' + MAX_CONTEXT_TOKENS.toLocaleString() + '.';
+      } else if (maxLength > contextLength - 512) {
+        problem = 'Longest answer must be at least 512 less than conversation memory.';
+      }
+      if (problem) {
+        showSettingsTab('model');
+        setSettingsNote(problem, true);
+        return;
+      }
+      var accentColor = $('accentCustomSetting').checked ? $('accentSetting').value : '';
+      modelSettings = {temperature: temperature, maxLength: maxLength, contextLength: contextLength, version: MODEL_SETTINGS_VERSION};
+      persistModelSettings();
+      personalization = {
+        displayName: $('displayNameSetting').value.trim().slice(0, 32),
+        accentColor: /^#[0-9a-f]{6}$/i.test(accentColor) ? accentColor : '',
+        textSize: ['small', 'medium', 'large'].indexOf($('textSizeSetting').value) >= 0 ? $('textSizeSetting').value : 'medium',
+        persona: PERSONAS[$('personaSetting').value] ? $('personaSetting').value : 'default',
+        customInstructions: $('customInstructionsSetting').value.trim().slice(0, MAX_CUSTOM_INSTRUCTIONS),
+        voice: $('voiceSetting').value
+      };
+      savePersonalization();
+      applyPersonalization();
+      refreshThemePicker();
+      updateGreeting();
+      this.closeSettings();
+    },
     enableVision: enableVision,
     showUpdate: function(){ if (updateInfo && updateInfo.available) showUpdateModal(); },
     updateLater: function(){
@@ -3245,7 +3464,8 @@ var HF = (function(){
     },
     openServerLogs: openServerLogs,
     closeServerLogs: closeServerLogs,
-    saveSettings: function(){
+    saveSettings: function(){ this.saveAllSettings(); },
+    _oldSaveSettings: function(){
       var temperature = $('temperatureSetting').valueAsNumber;
       var maxLength = $('lengthSetting').valueAsNumber;
       var contextLength = $('contextSetting').valueAsNumber;
@@ -3262,7 +3482,8 @@ var HF = (function(){
       refreshSettingsForm();
       this.closeSettings();
     },
-    savePersonalization: function(){
+    savePersonalization: function(){ this.saveAllSettings(); },
+    _oldSavePersonalization: function(){
       var displayName = $('displayNameSetting').value.trim().slice(0, 32);
       var accentColor = $('accentCustomSetting').checked ? $('accentSetting').value : '';
       var textSize = $('textSizeSetting').value;
@@ -3497,7 +3718,7 @@ var HF = (function(){
           stop_sequence: ['<turn|>', '<|turn>']
         };
         if (hasPicture(attachment) && !visionReady) {
-          throw new Error('Image input is off. Turn it on in Settings > Image input.');
+          throw new Error('Image input is off. Turn it on in Settings > Voice & pictures.');
         }
         if (promptImage) generationPayload.images = [promptImage.image.split(',')[1]];
         // The prompt already opened the thought channel, so the reply starts inside it.

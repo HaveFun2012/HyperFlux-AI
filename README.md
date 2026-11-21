@@ -18,17 +18,17 @@ Riddles and real-world "what happens if" questions think automatically even with
 
 **In the desktop app:**
 
-- **Pictures:** attach a photo or screenshot with the paperclip and ask about it, including follow-up questions. HyperFlux keeps seeing the latest picture in the chat. Before sending, you can drag a box around the part that matters, such as small text, so it reaches the model much larger. If HyperFlux can't read something in a picture, it says so instead of guessing. Turn this on once in **Settings → Image input**, which downloads the vision file for your Gemma 4 E2B or E4B model (about 1 GB).
-- **Read aloud:** a **Read aloud** button under every answer speaks it with the Windows voices; the voice is chosen in Settings.
-- **Custom instructions:** tell HyperFlux about yourself once (**Settings → Custom instructions**, up to 1,500 characters), and it is sent with every message.
-- **Personas:** Default, Tutor, Coder, Concise or Friendly change the tone (**Settings → Persona** or `/persona tutor`).
+- **Pictures:** attach a photo or screenshot with the paperclip and ask about it, including follow-up questions. HyperFlux keeps seeing the latest picture in the chat. Before sending, you can drag a box around the part that matters, such as small text, so it reaches the model much larger. If HyperFlux can't read something in a picture, it says so instead of guessing. Turn this on once in **Settings → Voice & pictures**, which downloads the vision file for your Gemma 4 E2B or E4B model (about 1 GB).
+- **Read aloud:** a **Read aloud** button under every answer speaks it with the Windows voices; the voice is chosen (and can be tried) in **Settings → Voice & pictures**.
+- **Custom instructions:** tell HyperFlux about yourself once (**Settings → Personal**, up to 1,500 characters), and it is sent with every message.
+- **Personas:** Default, Tutor, Coder, Concise or Friendly change the tone (**Settings → Personal** or `/persona tutor`).
 - **Chats:** every chat is saved on this PC. The box above **Recent Chats** searches titles and message text, and the download icon on a chat (or `/export`) saves it as a Markdown file.
 - **Answers:** Copy and Retry on every answer, Edit on your last message, Stop while it writes. Long answers continue automatically instead of being cut off.
 - **Formatting:** LaTeX maths, tables and code blocks with Copy buttons.
 - **Web search:** HyperFlux decides when a question needs current or specific facts (prices, versions, news, game or product details) and skips searching for maths, coding and chat. It writes short keyword queries and splits multi-part questions into separate searches run at the same time. It opens and reads the top pages, keeps only the paragraphs that answer the question, and answers from them with numbered citations and a **Sources** list. If the sources don't answer the question, it searches once more with new words, then stops. Results are cached for 10 minutes, and the status line shows what is being searched. `/search <question>` always searches.
 - **Files:** attach a text or code file for review (the first 3,000 characters are read).
 - **Commands:** type `/` to see them: `/help`, `/search`, `/read`, `/persona`, `/export`, `/sys`, `/temp`, `/length`.
-- **Looks:** six colour themes in Dark, Light or Match system, a custom accent colour and text size.
+- **Settings:** one window with a section for each area: **Personal** (your name, custom instructions, persona), **Model** (creativity, answer length, conversation memory, with plain explanations and a reset), **Appearance** (six colour themes in Dark, Light or Match system, accent colour, text size), **Voice & pictures** and **About**. One **Save** button saves everything; deleting all chats asks first.
 - **Model picker:** switch between the GGUF models on this PC without restarting.
 - **Updates:** the installed app checks GitHub at startup and every 6 hours. When a new release is out, a popup shows its patch notes and the files that changed since your version, and asks before installing. **Later** keeps an **Update available** card in the sidebar, even after a restart, until you update or skip that version. Every installer is checked against its SHA-256 before it runs.
 
