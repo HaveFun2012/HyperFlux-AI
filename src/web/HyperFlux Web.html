@@ -2638,47 +2638,89 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
   thinking = thinking || {};
   var previousDetails = contentNode.querySelector('.reasoning-details');
   var previousScroll = previousDetails ? previousDetails.querySelector('.reasoning-summary') : null;
+  var previousAnswer = contentNode.querySelector('.assistant-answer');
+  var previousStatus = previousAnswer ? previousAnswer.querySelector('.generation-status') : null;
   var userChoice = contentNode.dataset.thinkingUserChoice;
   // Hold the current height while rebuilding. Otherwise the reply is briefly empty,
   // the chat shrinks, and the browser pulls the scroll position up to the question.
   contentNode.style.minHeight = contentNode.offsetHeight + 'px';
-  contentNode.replaceChildren();
   if (reasoning) {
-    var details = mk('details', 'reasoning-details' + (thinking.active ? ' thinking-active' : ''));
+    var details = previousDetails;
+    var summary;
+    var reasoningText;
+    if (!details) {
+      details = mk('details', 'reasoning-details');
+    }
+    details.className = 'reasoning-details' + (thinking.active ? ' thinking-active' : '');
     details.open = userChoice ? userChoice === 'open' : Boolean(thinking.active);
-    var summary = mk('summary');
-    summary.replaceChildren(buildThinkingIndicator(
+    summary = details.querySelector('summary');
+    reasoningText = details.querySelector('.reasoning-summary');
+    if (!summary) {
+      summary = mk('summary');
+      details.appendChild(summary);
+    }
+    if (!reasoningText) {
+      reasoningText = mk('div', 'reasoning-summary');
+      details.appendChild(reasoningText);
+    }
+    var existingIndicator = summary.querySelector('.thinking-indicator');
+    var indicator = existingIndicator || buildThinkingIndicator(
       thinking.active
         ? 'Thinking'
         : (Number.isFinite(thinking.seconds) ? 'Thought for ' + formatThoughtSeconds(thinking.seconds) : 'Thinking'),
       thinking.active
-    ));
-    summary.addEventListener('click', function() {
-      // details.open flips after the click handler runs.
-      contentNode.dataset.thinkingUserChoice = details.open ? 'closed' : 'open';
-    });
-    var reasoningText = mk('div', 'reasoning-summary');
+    );
+    var indicatorLabel = indicator.querySelector('span:nth-child(2)');
+    if (indicatorLabel) {
+      indicatorLabel.textContent = thinking.active
+        ? 'Thinking'
+        : (Number.isFinite(thinking.seconds) ? 'Thought for ' + formatThoughtSeconds(thinking.seconds) : 'Thinking');
+    }
+    var existingDots = indicator.querySelector('.generation-dots');
+    if (thinking.active && !existingDots) {
+      var dots = mk('span', 'generation-dots');
+      dots.setAttribute('aria-hidden', 'true');
+      dots.append(mk('i'), mk('i'), mk('i'));
+      indicator.appendChild(dots);
+    } else if (!thinking.active && existingDots) {
+      existingDots.remove();
+    }
+    if (!existingIndicator) summary.appendChild(indicator);
+    if (!summary.dataset.thinkingChoiceBound) {
+      summary.dataset.thinkingChoiceBound = 'true';
+      summary.addEventListener('click', function() {
+        // details.open flips after the click handler runs.
+        contentNode.dataset.thinkingUserChoice = details.open ? 'closed' : 'open';
+      });
+    }
     reasoningText.innerHTML = renderMarkdown(reasoning);
-    details.append(summary, reasoningText);
-    contentNode.appendChild(details);
     if (thinking.active) {
       reasoningText.scrollTop = reasoningText.scrollHeight;
     } else if (previousScroll) {
       reasoningText.scrollTop = previousScroll.scrollTop;
     }
   }
-  var answer = mk('div', 'assistant-answer');
+  var answer = previousAnswer || mk('div', 'assistant-answer');
   if (streaming) {
     if (text) answer.innerHTML = renderMarkdown(text);
     else if (!reasoning) {
-      var status = mk('div', 'generation-status');
-      status.setAttribute('role', 'status');
-      status.setAttribute('aria-live', 'polite');
-      status.appendChild(buildThinkingIndicator('Preparing a response', true));
-      answer.appendChild(status);
+      var status = previousStatus;
+      if (!status) {
+        status = mk('div', 'generation-status');
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+        status.appendChild(buildThinkingIndicator('Preparing a response', true));
+      }
+      if (status.parentElement !== answer) answer.appendChild(status);
+    } else if (previousStatus) {
+      previousStatus.remove();
     }
   } else {
     answer.innerHTML = renderMarkdown(text);
+  }
+  contentNode.replaceChildren();
+  if (reasoning) {
+    contentNode.appendChild(details);
   }
   contentNode.appendChild(answer);
   contentNode.style.minHeight = '';
