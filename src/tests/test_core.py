@@ -375,6 +375,25 @@ class HyperFluxCoreTests(unittest.TestCase):
         thinking, answer = split_reasoning_summary("<reasoning>I checked.</reasoning>Hi")
         self.assertEqual((thinking, answer), ("I checked.", "Hi"))
 
+    def test_other_models_tags_are_cleaned_up(self):
+        """The model picker can load any GGUF, so Qwen/GLM/R1/Llama output must look right."""
+        from hyperflux.core.kobold import clean_response
+
+        def reply(text):
+            thinking, answer, _ = split_thinking(text)
+            return thinking, clean_response(answer)
+
+        self.assertEqual(reply("<think>Work it out.</think>The answer is 42."),
+                         ("Work it out.", "The answer is 42."))
+        self.assertEqual(reply("<think>why</think>\n<answer>The answer is 42.</answer>"),
+                         ("why", "The answer is 42."))
+        self.assertEqual(reply("The answer is 42.<|im_end|>")[1], "The answer is 42.")
+        self.assertEqual(reply("The answer is 42.</s>")[1], "The answer is 42.")
+        self.assertEqual(clean_response("GLM: The answer is 42."), "The answer is 42.")
+        # A code example that mentions the same tags must survive untouched.
+        code = "In HTML, `</s>` is strikethrough and <s>old</s> shows a line."
+        self.assertEqual(reply(code)[1], code)
+
     def test_thinking_parser_hides_half_received_markers(self):
         self.assertEqual(split_thinking("<|chan"), ("", "", True))
         self.assertEqual(split_thinking("The answer is 42.<tu")[1], "The answer is 42.")

@@ -102,8 +102,9 @@ def fetch_model_name():
 def clean_response(text):
     """Strip turn markers and speaker labels the model sometimes echoes."""
     text = text.replace("<end_of_turn>", "").replace("<turn|>", "").strip()
+    text = _TRAILING_END.sub("", text)
     return re.sub(
-        r'^(?:Copilot|Assistant|HyperFlux|Qwen):\s*',
+        r'^(?:Copilot|Assistant|HyperFlux|Qwen|GLM|Gemma|Llama|Mistral|DeepSeek|Granite):\s*',
         '',
         text,
         flags=re.IGNORECASE,
@@ -116,8 +117,18 @@ _THOUGHT_BLOCKS = (
     re.compile(r"<think(?:ing)?\b[^>]*>([\s\S]*?)(</think(?:ing)?>|$)", re.IGNORECASE),
     re.compile(r"<reasoning\b[^>]*>([\s\S]*?)(</reasoning\s*>|$)", re.IGNORECASE),
 )
+# HyperFlux prompts Gemma 4, but the model picker can load any GGUF, so clean up the
+# tags other models use: <answer>...</answer> around the reply (DeepSeek R1 style), and
+# chat tokens that leak into the text (ChatML, Llama, GLM).
 _STRAY_MARKERS = re.compile(
-    r"<\|channel>|<channel\|>|</?think(?:ing)?\b[^>]*>|</?reasoning\b[^>]*>",
+    r"<\|channel>|<channel\|>|</?think(?:ing)?\b[^>]*>|</?reasoning\b[^>]*>|"
+    r"</?answer\s*>|<\|im_(?:start|end)\|>|<\|(?:user|assistant|system|observation)\|>|"
+    r"<\|start_header_id\|>|<\|end_header_id\|>|<\|begin_of_text\|>|\[gMASK\]|<sop>",
+    re.IGNORECASE,
+)
+# End-of-reply tokens, removed only at the end so a code example keeping "</s>" is safe.
+_TRAILING_END = re.compile(
+    r"(?:\s*(?:</s>|<\|endoftext\|>|<\|eot_id\|>|<\|im_end\|>|<end_of_turn>|<\|end\|>))+\s*$",
     re.IGNORECASE,
 )
 
@@ -138,7 +149,8 @@ def split_thinking(text):
             if not match.group(2):
                 thinking_done = False
             text = text[:match.start()] + text[match.end():]
-    answer = _trim_partial_marker(_STRAY_MARKERS.sub("", text).rstrip()).strip()
+    answer = _TRAILING_END.sub("", text)
+    answer = _trim_partial_marker(_STRAY_MARKERS.sub("", answer).rstrip()).strip()
     return "\n\n".join(t for t in thoughts if t), answer, thinking_done
 
 
