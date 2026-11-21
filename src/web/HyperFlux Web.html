@@ -311,9 +311,22 @@ body{font-family:var(--font);font-size:14px;line-height:1.6;color:var(--t1);back
 .reasoning-details[open] summary::before{transform:rotate(90deg)}
 .reasoning-summary{margin-top:8px;max-height:320px;overflow-y:auto;padding-right:6px}
 .reasoning-summary>:first-child{margin-top:0}
-.reasoning-details.thinking-active summary{animation:thinkingPulse 1.4s ease-in-out infinite}
-@keyframes thinkingPulse{0%,100%{opacity:1}50%{opacity:.45}}
-@media (prefers-reduced-motion:reduce){.reasoning-details.thinking-active summary{animation:none}}
+.reasoning-details.thinking-active summary{color:var(--t1)}
+.reasoning-details.thinking-active{border-color:var(--acbr);background:var(--soft)}
+.thinking-indicator{display:inline-flex;align-items:center;gap:8px}
+.thinking-orb{position:relative;width:12px;height:12px;border-radius:50%;border:1.5px solid var(--acbr);flex:0 0 12px}
+.thinking-orb::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--ac3);animation:thinkingBreathe 1.6s ease-in-out infinite}
+.generation-status{display:flex;align-items:center;gap:9px;min-height:22px;color:var(--t2);font-weight:600}
+.generation-status .thinking-orb{width:14px;height:14px;flex-basis:14px}
+.generation-dots{display:inline-flex;gap:3px;margin-left:-4px}
+.generation-dots i{width:3px;height:3px;border-radius:50%;background:var(--t3);animation:generationDot 1.2s ease-in-out infinite}
+.generation-dots i:nth-child(2){animation-delay:.14s}
+.generation-dots i:nth-child(3){animation-delay:.28s}
+@keyframes thinkingBreathe{0%,100%{transform:scale(.55);opacity:.45}50%{transform:scale(1);opacity:1}}
+@keyframes generationDot{0%,70%,100%{transform:translateY(0);opacity:.35}35%{transform:translateY(-3px);opacity:1}}
+@media (prefers-reduced-motion:reduce){
+  .thinking-orb::after,.generation-dots i{animation:none}
+}
 .a-content>*:first-child{margin-top:0}
 .a-content>*:last-child{margin-bottom:0}
 .a-content p{margin:0 0 12px}
@@ -2605,6 +2618,22 @@ function splitAssistantResponse(text, allowReasoning) {
 // thinking: {active: still thinking, seconds: how long it thought}.
 // The box is open while the model thinks and closes when the answer starts,
 // unless the user opened or closed it themselves.
+function buildThinkingIndicator(label, includeDots) {
+  var wrap = mk('span', 'thinking-indicator');
+  var orb = mk('span', 'thinking-orb');
+  orb.setAttribute('aria-hidden', 'true');
+  var text = mk('span');
+  text.textContent = label;
+  wrap.append(orb, text);
+  if (includeDots) {
+    var dots = mk('span', 'generation-dots');
+    dots.setAttribute('aria-hidden', 'true');
+    dots.append(mk('i'), mk('i'), mk('i'));
+    wrap.appendChild(dots);
+  }
+  return wrap;
+}
+
 function renderAssistantContent(contentNode, text, reasoning, streaming, thinking) {
   thinking = thinking || {};
   var previousDetails = contentNode.querySelector('.reasoning-details');
@@ -2618,9 +2647,12 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
     var details = mk('details', 'reasoning-details' + (thinking.active ? ' thinking-active' : ''));
     details.open = userChoice ? userChoice === 'open' : Boolean(thinking.active);
     var summary = mk('summary');
-    summary.textContent = thinking.active
-      ? 'Thinking…'
-      : (Number.isFinite(thinking.seconds) ? 'Thought for ' + formatThoughtSeconds(thinking.seconds) : 'Thinking');
+    summary.replaceChildren(buildThinkingIndicator(
+      thinking.active
+        ? 'Thinking'
+        : (Number.isFinite(thinking.seconds) ? 'Thought for ' + formatThoughtSeconds(thinking.seconds) : 'Thinking'),
+      thinking.active
+    ));
     summary.addEventListener('click', function() {
       // details.open flips after the click handler runs.
       contentNode.dataset.thinkingUserChoice = details.open ? 'closed' : 'open';
@@ -2638,7 +2670,13 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
   var answer = mk('div', 'assistant-answer');
   if (streaming) {
     if (text) answer.innerHTML = renderMarkdown(text);
-    else answer.textContent = reasoning ? '' : 'Thinking…';
+    else if (!reasoning) {
+      var status = mk('div', 'generation-status');
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      status.appendChild(buildThinkingIndicator('Preparing a response', true));
+      answer.appendChild(status);
+    }
   } else {
     answer.innerHTML = renderMarkdown(text);
   }
@@ -3682,7 +3720,7 @@ var HF = (function(){
         '<div class="a-ava" aria-hidden="true"><img class="flash-model-logo-img" src="logo_hyperflux/hyperfluxdesktop.png" alt=""></div>' +
         '<div class="a-body">' +
           '<div class="a-head"><span class="a-name">HyperFlux</span><span class="a-badge">' + MODEL_TIERS[requestModel].short + '</span></div>' +
-          '<div class="a-card"><div class="a-content" id="content-' + aiRowId + '">Thinking...</div></div>' +
+          '<div class="a-card"><div class="a-content" id="content-' + aiRowId + '"><div class="generation-status" role="status" aria-live="polite"><span class="thinking-indicator"><span class="thinking-orb" aria-hidden="true"></span><span>Preparing a response</span><span class="generation-dots" aria-hidden="true"><i></i><i></i><i></i></span></span></div></div></div>' +
         '</div>';
       feed.appendChild(aiNode);
       feed.scrollTop = feed.scrollHeight;
