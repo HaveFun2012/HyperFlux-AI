@@ -2904,7 +2904,10 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
   var previousDetails = contentNode.querySelector('.reasoning-details');
   var previousScroll = previousDetails ? previousDetails.querySelector('.reasoning-summary') : null;
   var previousAnswer = contentNode.querySelector('.assistant-answer');
-  var previousStatus = previousAnswer ? previousAnswer.querySelector('.generation-status') : null;
+  var previousStatus = contentNode.querySelector(':scope > .generation-status');
+  if (!previousStatus && previousAnswer) {
+    previousStatus = previousAnswer.querySelector('.generation-status');
+  }
   var userChoice = contentNode.dataset.thinkingUserChoice;
   // Hold the current height while rebuilding. Otherwise the reply is briefly empty,
   // the chat shrinks, and the browser pulls the scroll position up to the question.
@@ -2951,7 +2954,10 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
   }
   var answer = previousAnswer || mk('div', 'assistant-answer');
   if (streaming) {
-    if (text) answer.innerHTML = renderMarkdown(text);
+    if (text) {
+      if (previousStatus) previousStatus.remove();
+      answer.innerHTML = renderMarkdown(text);
+    }
     else if (!reasoning) {
       var status = previousStatus;
       if (!status) {
@@ -2959,8 +2965,8 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
         status.setAttribute('role', 'status');
         status.setAttribute('aria-live', 'polite');
         status.appendChild(buildThinkingIndicator('Preparing a response', true));
+        answer.appendChild(status);
       }
-      if (status.parentElement !== answer) answer.appendChild(status);
     } else if (previousStatus) {
       previousStatus.remove();
     }
@@ -2970,7 +2976,7 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
   // Only move what actually moved: taking a node out of the page and putting it back
   // restarts its CSS animation, which made the shimmer stutter on every streamed frame.
   Array.prototype.slice.call(contentNode.children).forEach(function(child) {
-    if (child !== answer && (!reasoning || child !== details)) child.remove();
+    if (child !== answer && child !== previousStatus && (!reasoning || child !== details)) child.remove();
   });
   if (reasoning && details.parentElement !== contentNode) contentNode.appendChild(details);
   if (answer.parentElement !== contentNode) contentNode.appendChild(answer);
@@ -3227,14 +3233,26 @@ function setResearchStatus(node, text) {
     syncShimmer(label);
     return;
   }
-  node.textContent = '';
-  var answer = mk('div', 'assistant-answer');
-  var status = mk('div', 'generation-status');
-  status.setAttribute('role', 'status');
-  status.setAttribute('aria-live', 'polite');
-  status.appendChild(buildThinkingIndicator(text, true));
-  answer.appendChild(status);
-  node.appendChild(answer);
+  var answer = node.querySelector('.assistant-answer');
+  var status = node.querySelector(':scope > .generation-status');
+  if (!answer) {
+    answer = mk('div', 'assistant-answer');
+    node.appendChild(answer);
+  }
+  if (!status) {
+    status = mk('div', 'generation-status');
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    node.insertBefore(status, answer);
+  }
+  label = status.querySelector('.ti-label');
+  if (!label) {
+    status.appendChild(buildThinkingIndicator(text, true));
+  } else {
+    if (label.textContent !== text) label.textContent = text;
+    label.classList.add('hf-live');
+    syncShimmer(label);
+  }
 }
 
 // Returns {queries, sources, prompt} to answer from, or null when no search is needed.
@@ -3278,9 +3296,12 @@ async function startResearch(prompt, statusNode, signal, previous) {
 // Some answers end with their own "Sources" list even though the prompt says not to.
 // HyperFlux adds the real one from the pages it read, so drop the model's copy.
 function stripModelSources(text) {
-  return String(text || '').replace(
-    /\n+\s*(?:\*\*|#{1,4}\s*)?(?:sources?|references?|citations?)\b\s*:?\s*(?:\*\*)?\s*\n(?:[^\n]*\n?)*$/i,
-    function(block) { return /\[?\d\]?[.)]|https?:\/\//.test(block) ? '' : block; }
+  var cleaned = String(text || '')
+    .replace(/\n*<end>\s*$/i, '')
+    .trimEnd();
+  return cleaned.replace(
+    /\n+\s*(?:\*\*|#{1,4}\s*)?(?:sources?|references?|citations?)\b(?:\s*:|\s*\*\*)?\s*\n[\s\S]*$/i,
+    ''
   ).trimEnd();
 }
 
@@ -4287,7 +4308,7 @@ var HF = (function(){
         }
         if (research) {
           reply = stripModelSources(reply);
-          reply += sourcesFooter(reply, research.sources);
+          // Inline citations remain in the answer. The separate Sources list is omitted.
         }
 
         var finalContentNode = document.getElementById('content-' + aiRowId);
