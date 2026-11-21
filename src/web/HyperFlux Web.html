@@ -606,10 +606,14 @@ body.sb-collapsed .sb{margin-left:calc(-1 * var(--sbw) - 12px);opacity:0;pointer
 .thinking-orb,.generation-dots{display:none}
 .generation-status{display:flex;align-items:center;min-height:22px;color:var(--t3);font-weight:600}
 .ti-label{font-weight:600}
-.hf-live{background:linear-gradient(100deg,var(--t3) 30%,var(--t1) 50%,var(--t3) 70%);background-size:280% 100%;
+:root{--shimmer-ms:2600}  /* one source of truth: the page code reads this too */
+.hf-live{background:linear-gradient(90deg,var(--t3) 30%,var(--t1) 50%,var(--t3) 70%);background-size:120% 100%;background-repeat:repeat-x;
   -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;
-  animation:hfShimmer 2.6s linear infinite}
-@keyframes hfShimmer{from{background-position:180% 0}to{background-position:-80% 0}}
+  animation:hfShimmer calc(var(--shimmer-ms) * 1ms) linear infinite}
+/* The tile is 1.2x the text's width and a percentage position p shifts it by -(0.2 x p x text width), so
+   600% -> 0% moves it by exactly one tile. Both ends are the same picture, so the loop has no seam, and
+   because the tile is barely wider than the text, a highlight is on the text at every moment (no rest gap). */
+@keyframes hfShimmer{from{background-position:600% 0}to{background-position:0% 0}}
 @media (prefers-reduced-motion:reduce){
   .hf-live{animation:none;color:var(--t2);-webkit-text-fill-color:var(--t2)}
 }
@@ -2946,14 +2950,18 @@ function splitAssistantResponse(text, allowReasoning) {
 // thinking: {active: still thinking, seconds: how long it thought}.
 // The box is open while the model thinks and closes when the answer starts,
 // unless the user opened or closed it themselves.
-var SHIMMER_MS = 2600;  // keep in step with the hfShimmer animation in the CSS
+// The shimmer's length is defined once, in CSS (--shimmer-ms); read it from there so they can't drift apart.
+function shimmerMs() {
+  var value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shimmer-ms'));
+  return value > 0 ? value : 2600;
+}
 
 // Start the shimmer at the phase a continuous one would be at now, so rebuilding the
 // label (a new status line, a redrawn reply box) is invisible instead of a restart.
 function syncShimmer(label) {
   if (!label || label.dataset.shimmer === 'on') return;
   label.dataset.shimmer = 'on';
-  label.style.animationDelay = '-' + ((Date.now() % SHIMMER_MS) / 1000).toFixed(3) + 's';
+  label.style.animationDelay = '-' + ((Date.now() % shimmerMs()) / 1000).toFixed(3) + 's';
 }
 
 function stopShimmer(label) {
