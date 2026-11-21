@@ -478,6 +478,172 @@ body.hf-generating .msg-actions{display:none}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* ==== UI polish (Lab) =========================================================== */
+#neuralCanvas{opacity:.45}
+/* Sidebar */
+.sb{transition:margin .25s var(--ease),opacity .2s}
+body.sb-collapsed .sb{margin-left:calc(-1 * var(--sbw) - 12px);opacity:0;pointer-events:none}
+.sb-head{padding-bottom:8px}
+.logo{margin-bottom:14px}
+.btn-new{justify-content:flex-start;font-weight:700}
+.sec-lbl{display:none}
+.hist-search{margin:4px 12px 10px}
+.h-group{padding:12px 12px 4px;font:700 10.5px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--t3)}
+.h-group:first-child{padding-top:2px}
+.h-item{margin-bottom:2px;padding:8px 10px;background:none}
+.h-item:hover{transform:none;background:var(--soft);border-color:transparent}
+.h-item.active{background:var(--acbg);border-color:var(--acbr);color:var(--t1)}
+.h-exp,.h-del{opacity:0;transition:opacity .15s}
+.h-item:hover .h-exp,.h-item:hover .h-del,.h-item:focus-within .h-exp,.h-item:focus-within .h-del,.h-item.active .h-exp,.h-item.active .h-del{opacity:1}
+.sb-foot{flex-direction:row;align-items:center;gap:8px;padding:10px 12px 12px}
+.sf-btn{flex:1;justify-content:flex-start}
+.sf-icon{flex:0 0 40px;width:40px;justify-content:center;padding:9px 0}
+/* Top bar */
+.topbar{height:48px;padding:0 14px}
+.icon-btn{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;border:1px solid var(--gb2);background:var(--gs);color:var(--t2);cursor:pointer;flex-shrink:0;transition:.15s}
+.icon-btn:hover{color:var(--t1);border-color:var(--acbr);background:var(--acbg)}
+.icon-btn:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.stxt{font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--t2);letter-spacing:0}
+.server-log-btn{width:34px;height:34px;padding:0;display:grid;place-items:center}
+.server-log-btn .btn-label{display:none}
+/* Home */
+.home{padding:28px 20px 36px}
+.home-inner{max-width:720px}
+.eyebrow{display:none}
+.home-greeting{font-size:14px;color:var(--t3);margin-bottom:4px}
+.home-h{font-size:34px;margin-bottom:22px}
+.home-sub{display:none}
+.home-inp{flex-direction:row;padding:14px 14px 12px 18px;border-radius:22px;text-align:left}
+.home-inp .home-ta{flex:1 1 100%;min-height:52px}
+.home-inp .go-btn{margin-left:auto}
+.go-btn:hover,.send-btn:hover{transform:scale(1.06)}
+.quick-starts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:16px}
+.quick-start{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:var(--rp);border:1px solid var(--gb2);background:var(--g1);color:var(--t2);font:600 12.5px var(--font);cursor:pointer;transition:.15s}
+.quick-start i{color:var(--ac3)}
+.quick-start:hover{color:var(--t1);border-color:var(--acbr);background:var(--acbg)}
+.whats-new-btn{margin-top:22px;display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:var(--rp);border:1px solid var(--gb);background:none;color:var(--t3);font:600 12px var(--font);cursor:pointer}
+.whats-new-btn:hover{color:var(--t1);border-color:var(--acbr)}
+.whats-new-btn b{padding:3px 8px;border-radius:var(--rp);background:var(--acbg);color:var(--ac3);font:700 10.5px var(--font)}
+.demo-card{display:none}
+.whats-new-modal{max-width:640px}
+.whats-new-modal .release-card{margin:0;max-width:none;padding:0;background:none;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.whats-new-modal .release-list{font-size:13px}
+/* Chat messages: one centred column of comfortable width */
+.feed{align-items:center;padding:28px 24px 12px;gap:26px}
+.feed>.msg-u,.feed>.msg-a{width:100%;max-width:800px}
+.u-wrap{max-width:80%}
+.u-bub{background:var(--acbg);color:var(--t1);border:1px solid var(--acbr);box-shadow:none;border-radius:18px 18px 6px 18px;padding:10px 16px}
+.u-bub .attachment-chip{background:var(--soft);border-color:var(--gb2);color:var(--t2)}
+.msg-a{gap:12px}
+.a-ava{width:30px;height:30px;border-radius:10px}
+.a-ava img{border-radius:9px}
+.a-head{margin:4px 0 6px}
+.a-card{padding:0;background:none;border:0;box-shadow:none;border-radius:0}
+.a-content{line-height:1.75}
+.feed>.loaded{animation:none}
+.sf-icon{min-height:38px}
+.msg-actions{margin-top:10px}
+/* Message box */
+.inp-area{padding:8px 24px 14px;flex-direction:column;align-items:center}
+.inp-box{width:min(100%,800px);border-radius:22px;padding:12px 12px 10px 18px}
+.charct{display:none}
+.inp-foot .send-btn{margin-left:auto}
+.inp-hint{width:min(100%,800px);margin-top:6px;text-align:center;font-size:11px;color:var(--t3)}
+.inp-hint kbd{font:600 10.5px var(--mono);padding:1px 5px;border-radius:5px;border:1px solid var(--gb2);background:var(--soft)}
+@media(max-width:760px){
+  .sb{position:fixed;inset:12px auto 12px 12px;z-index:20}
+  body:not(.sb-open) .sb{margin-left:calc(-1 * var(--sbw) - 24px);opacity:0;pointer-events:none}
+  .inp-hint{display:none}
+}
+
+/* ==== Round 2 ===================================================================== */
+/* Home: patch notes left, feature spotlight right */
+.home-inner{max-width:900px}
+.home-inp,.quick-starts{max-width:720px;margin-left:auto;margin-right:auto}
+.home-cards{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;margin-top:26px;text-align:left;align-items:stretch}
+.home-cards .release-card,.home-cards .demo-card{display:flex;flex-direction:column;margin:0;max-width:none}
+.home-cards .release-list{grid-template-columns:1fr;flex:1}
+.home-cards .release-foot{margin-top:auto}
+.home-cards .demo-card{min-height:0}
+.home-cards .demo-content{flex:1;display:flex;flex-direction:column}
+.home-cards .demo-action{margin-top:auto;align-self:flex-start}
+.home-cards .demo-description{margin-bottom:14px}
+@media(max-width:900px){.home-cards{grid-template-columns:1fr}}
+/* Calmer indicator: a still dot and softly fading dots (no pulsing, no bouncing) */
+.thinking-orb{border-color:var(--acbr)}
+.thinking-orb::after{animation:none;transform:none;opacity:.85}
+.generation-status{font-weight:500;color:var(--t3)}
+.generation-status .thinking-orb{width:10px;height:10px;flex-basis:10px}
+.generation-dots i{animation:generationFade 1.8s ease-in-out infinite}
+@keyframes generationFade{0%,100%{opacity:.25}50%{opacity:.9}}
+/* Gentle motion where things used to just appear */
+@keyframes riseIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes popIn{from{opacity:0;transform:translateY(8px) scale(.975)}to{opacity:1;transform:none}}
+@keyframes fadeSlide{from{opacity:0;transform:translateX(6px)}to{opacity:1;transform:none}}
+@keyframes menuIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
+.home.home-enter .quick-start,.home-inner .quick-start{animation:riseIn .45s var(--ease) both}
+.quick-start:nth-child(2){animation-delay:.05s}.quick-start:nth-child(3){animation-delay:.1s}.quick-start:nth-child(4){animation-delay:.15s}
+.home-cards>*{animation:riseIn .5s var(--ease) both;animation-delay:.18s}
+.home-cards>*:nth-child(2){animation-delay:.26s}
+.quick-start,.sf-btn,.link-btn,.release-control,.demo-action,.settings-tab,.h-item,.theme-opt,.mode-opt{transition:transform .18s var(--ease),background .18s,border-color .18s,color .18s,box-shadow .18s}
+.quick-start:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.quick-start:active,.sf-btn:active,.link-btn:active,.act-btn:active,.settings-foot button:active,.setting-actions button:active{transform:scale(.96)}
+.send-btn:active,.go-btn:active{transform:scale(.92)}
+.ovl.vis>.modal,.ovl.vis>section.modal{animation:popIn .26s var(--ease) both}
+.settings-panel:not([hidden]){animation:fadeSlide .22s var(--ease) both}
+.model-menu:not([hidden]),.slash-menu:not([hidden]){animation:menuIn .16s var(--ease) both}
+.h-item.renamed .h-ttl{animation:riseIn .4s var(--ease) both}
+.update-card:not([hidden]){animation:riseIn .4s var(--ease) both}
+/* 5. The reminder under the message box */
+.inp-hint{display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px}
+.inp-hint .mistakes{color:var(--t3)}
+.inp-hint .keys{opacity:.75}
+
+/* ==== Round 3 ===================================================================== */
+/* One animation for both waiting states: a soft shimmer across the words. */
+.thinking-indicator{display:inline-flex;align-items:center;gap:8px}
+.thinking-orb,.generation-dots{display:none}
+.generation-status{display:flex;align-items:center;min-height:22px;color:var(--t3);font-weight:600}
+.ti-label{font-weight:600}
+.hf-live{background:linear-gradient(100deg,var(--t3) 30%,var(--t1) 50%,var(--t3) 70%);background-size:280% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;
+  animation:hfShimmer 2.6s linear infinite}
+@keyframes hfShimmer{from{background-position:180% 0}to{background-position:-80% 0}}
+@media (prefers-reduced-motion:reduce){
+  .hf-live{animation:none;color:var(--t2);-webkit-text-fill-color:var(--t2)}
+}
+/* Scrollbars that match the theme instead of the browser's white ones */
+*{scrollbar-width:thin;scrollbar-color:var(--gb2) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--gb2);border-radius:999px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--ac);background-clip:content-box}
+::-webkit-scrollbar-corner{background:transparent}
+/* Interface style: Modern (flat, calm) and Legacy (glass and particles) */
+.style-switch{grid-template-columns:1fr 1fr}
+.style-opt{display:flex;flex-direction:column;gap:2px;padding:10px 8px;line-height:1.3}
+.style-opt small{font:500 10.5px var(--font);color:var(--t3)}
+.style-opt[aria-pressed="true"] small{color:var(--ac3)}
+body.style-modern{--r6:18px;--r7:20px;--sdw:0 1px 2px rgba(0,0,0,.16),0 10px 28px rgba(0,0,0,.2)}
+body.style-modern #neuralCanvas{display:none}
+body.style-modern .panel{background:var(--g1);backdrop-filter:none;-webkit-backdrop-filter:none;
+  border:1px solid var(--gb);box-shadow:0 1px 3px rgba(0,0,0,.22)}
+body.style-modern .home-inp,body.style-modern .inp-box,body.style-modern .release-card,
+body.style-modern .demo-card,body.style-modern .modal,body.style-modern .model-menu,body.style-modern .slash-menu{
+  backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--g2);border:1px solid var(--gb2);box-shadow:none}
+body.style-modern .home-inp,body.style-modern .inp-box{background:var(--inp-bg);border-width:1px}
+body.style-modern .modal{box-shadow:0 18px 48px rgba(0,0,0,.34)}
+body.style-modern .ovl{backdrop-filter:blur(3px)}
+body.style-modern .demo-card::after{display:none}
+body.style-modern .logo-gem,body.style-modern .u-bub,body.style-modern .a-ava{box-shadow:none}
+body.style-modern .btn-new:hover{box-shadow:none;transform:none;background:var(--acbg);border-color:var(--ac)}
+body.style-modern .quick-start:hover{box-shadow:none}
+body.style-modern .logo-name{background:none;-webkit-text-fill-color:var(--t1);color:var(--t1)}
+body.style-modern .home-h{background:none;-webkit-text-fill-color:var(--t1);color:var(--t1)}
+body.style-modern .u-bub{background:var(--g2);border-color:var(--gb2)}
+body.style-modern .send-btn,body.style-modern .go-btn{background:var(--ac);color:#fff}
+.theme-light-mode.style-modern .send-btn,.theme-light-mode.style-modern .go-btn{color:#fff}
 </style>
 </head>
 <body class="theme-default">
@@ -497,7 +663,7 @@ body.hf-generating .msg-actions{display:none}
       </div>
       <button class="btn-new" onclick="HF.newChat()"><i class="fas fa-plus"></i><span>New chat</span></button>
     </div>
-    <span class="sec-lbl">Recent Chats</span>
+    <span class="sec-lbl">Chats</span>
     <label class="hist-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input id="histSearch" type="search" placeholder="Search chats" aria-label="Search chats" oninput="renderHistoryList()"></label>
     <div class="hist"><div id="histList"></div></div>
     <div class="sb-foot">
@@ -509,20 +675,20 @@ body.hf-generating .msg-actions{display:none}
           <button type="button" class="primary" id="updateCardInstall" onclick="HF.installUpdate()">Update now</button>
         </div>
       </div>
-      <button class="sf-btn" onclick="HF.openSettings('appearance')"><i class="fas fa-palette"></i><span>Appearance</span></button>
-      <button class="sf-btn" onclick="HF.openSettings()"><i class="fas fa-gear"></i><span>Settings</span></button>
-      <button class="sf-btn" onclick="HF.clearAllChats()"><i class="fas fa-trash-can"></i><span>Clear All History</span></button>
+      <button class="sf-btn" type="button" onclick="HF.openSettings()"><i class="fas fa-gear"></i><span>Settings</span></button>
+      <button class="sf-btn sf-icon" type="button" title="Appearance" aria-label="Appearance" onclick="HF.openSettings('appearance')"><i class="fas fa-palette"></i></button>
     </div>
   </aside>
 
   <div class="main-col">
     <header class="topbar panel">
+      <button class="icon-btn" type="button" title="Show or hide the sidebar" aria-label="Show or hide the sidebar" onclick="HF.toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="spill">
         <div class="s-dot checking" id="statusDot"></div>
         <span class="stxt" id="statusTxt">Checking Kobold - HyperFlux Server...</span>
       </div>
       <div class="topbar-actions">
-        <button class="server-log-btn" type="button" onclick="HF.openServerLogs()" aria-haspopup="dialog"><i class="fas fa-terminal" aria-hidden="true"></i> Server logs</button>
+        <button class="server-log-btn" type="button" title="Server logs" aria-label="Server logs" onclick="HF.openServerLogs()" aria-haspopup="dialog"><i class="fas fa-terminal" aria-hidden="true"></i><span class="btn-label"> Server logs</span></button>
         <button class="settings-btn" onclick="HF.openSettings()"><i class="fas fa-gear"></i> Settings</button>
       </div>
     </header>
@@ -532,7 +698,7 @@ body.hf-generating .msg-actions{display:none}
         <div class="home-inner">
           <div class="eyebrow" id="homeVersion">HYPERFLUX · FLASH 1 · APEX 1 · HORIZON 1</div>
           <div class="home-greeting" id="homeGreeting">Good afternoon, there</div>
-          <div class="home-h">How can I help?</div>
+          <div class="home-h">How can I help today?</div>
           <div class="home-sub">Your local AI workspace. Chat privately with the model connected through Kobold - HyperFlux Server.</div>
           <div class="home-inp">
             <div class="attachment-chip home-attachment" id="homeAttachment" hidden><i class="fas fa-paperclip" aria-hidden="true"></i><span class="attachment-chip-name" id="homeAttachmentName"></span><button class="attachment-chip-remove" type="button" aria-label="Remove attached file" onclick="HF.removeAttachment()"><i class="fas fa-xmark"></i></button></div>
@@ -542,33 +708,42 @@ body.hf-generating .msg-actions{display:none}
             <button class="think-btn" type="button" aria-pressed="true" onclick="HF.toggleThinking()"><i class="fas fa-brain" aria-hidden="true"></i><span>Think</span></button>
             <button class="go-btn" onclick="HF.homeGo()"><i class="fas fa-arrow-up"></i></button>
           </div>
-          <section class="release-card" aria-labelledby="releaseTitle" aria-live="polite">
-            <div class="release-head">
-              <h2 class="release-title" id="releaseTitle">Meet the HyperFlux models</h2>
-              <div class="release-controls">
-                <span class="version-badge" id="releaseBadge">Flash 1 · Apex 1 · Horizon 1</span>
-                <span class="release-page" id="releasePage">1 / 2</span>
-                <button class="release-control" type="button" aria-label="Show previous release notes" title="Previous release notes" onclick="HF.changeReleaseNotes(-1)"><i class="fas fa-chevron-left"></i></button>
-                <button class="release-control" type="button" aria-label="Show next release notes" title="Next release notes" onclick="HF.changeReleaseNotes(1)"><i class="fas fa-chevron-right"></i></button>
+          <div class="quick-starts" role="group" aria-label="Quick starts">
+            <button class="quick-start" type="button" onclick="HF.quickStart('explain')"><i class="fas fa-lightbulb"></i>Explain something</button>
+            <button class="quick-start" type="button" onclick="HF.quickStart('code')"><i class="fas fa-code"></i>Write code</button>
+            <button class="quick-start" type="button" onclick="HF.quickStart('search')"><i class="fas fa-globe"></i>Search the web</button>
+            <button class="quick-start" type="button" onclick="HF.quickStart('picture')"><i class="fas fa-image"></i>Ask about a picture</button>
+          </div>
+          <div class="home-cards">
+            <section class="release-card" aria-labelledby="releaseTitle" aria-live="polite">
+              <div class="release-head">
+                <h2 class="release-title" id="releaseTitle">Meet the HyperFlux models</h2>
+                <div class="release-controls">
+                  <span class="version-badge" id="releaseBadge">Flash 1 · Apex 1 · Horizon 1</span>
+                  <span class="release-page" id="releasePage">1 / 2</span>
+                  <button class="release-control" type="button" aria-label="Show previous release notes" title="Previous release notes" onclick="HF.changeReleaseNotes(-1)"><i class="fas fa-chevron-left"></i></button>
+                  <button class="release-control" type="button" aria-label="Show next release notes" title="Next release notes" onclick="HF.changeReleaseNotes(1)"><i class="fas fa-chevron-right"></i></button>
+                </div>
               </div>
-            </div>
-            <ul class="release-list" id="releaseList"></ul>
-            <div class="release-foot" id="releaseFoot">FLASH 1 RELEASE NOTES · WEB FEATURES</div>
-          </section>
-          <section class="demo-card" aria-labelledby="demoTitle">
-            <div class="demo-top">
-              <span class="demo-kicker"><i class="fas fa-sparkles"></i> Feature spotlight</span>
-              <div class="demo-controls">
-                <span class="demo-count" id="demoCount" aria-live="polite"></span>
-                <button class="demo-control" type="button" aria-label="Show another feature demo" title="Random feature" onclick="HF.shuffleFeatureDemo()"><i class="fas fa-shuffle"></i></button>
+              <ul class="release-list" id="releaseList"></ul>
+              <div class="release-foot" id="releaseFoot">FLASH 1 RELEASE NOTES · WEB FEATURES</div>
+            </section>
+            <section class="demo-card" aria-labelledby="demoTitle">
+              <div class="demo-top">
+                <span class="demo-kicker"><i class="fas fa-sparkles"></i> Feature spotlight</span>
+                <div class="demo-controls">
+                  <span class="demo-count" id="demoCount" aria-live="polite"></span>
+                  <button class="demo-control" type="button" aria-label="Show another feature demo" title="Random feature" onclick="HF.shuffleFeatureDemo()"><i class="fas fa-shuffle"></i></button>
+                </div>
               </div>
-            </div>
-            <div class="demo-content">
-              <h2 class="demo-title" id="demoTitle">Explore a HyperFlux feature</h2>
-              <p class="demo-description" id="demoDescription">A quick interactive example to try.</p>
-              <button class="demo-action" id="demoAction" type="button" onclick="HF.tryFeatureDemo()">Try this feature</button>
-            </div>
-          </section>
+              <div class="demo-content">
+                <h2 class="demo-title" id="demoTitle">Explore a HyperFlux feature</h2>
+                <p class="demo-description" id="demoDescription">A quick interactive example to try.</p>
+                <button class="demo-action" id="demoAction" type="button" onclick="HF.tryFeatureDemo()">Try this feature</button>
+              </div>
+            </section>
+          </div>
+
         </div>
       </div>
       
@@ -587,6 +762,7 @@ body.hf-generating .msg-actions{display:none}
             <button class="send-btn" id="sendBtn" type="button" aria-label="Send message" onclick="HF.sendOrStop()"><i class="fas fa-arrow-up"></i></button>
           </div>
         </div>
+        <div class="inp-hint"><span class="mistakes">HyperFlux can make mistakes, so check important information.</span><span class="keys"><kbd>/</kbd> for commands &middot; <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</span></div>
       </div>
     </div>
   </div>
@@ -667,8 +843,13 @@ body.hf-generating .msg-actions{display:none}
       </div>
 
       <div class="settings-panel" role="tabpanel" data-panel="appearance" hidden>
+        <h4>Interface style</h4>
+        <p class="panel-sub">Everything here changes right away.</p>
+        <div class="mode-switch style-switch" role="group" aria-label="Interface style">
+          <button class="mode-opt style-opt" type="button" data-style="modern" aria-pressed="false" onclick="HF.setUiStyle('modern')">Modern<small>Clean and flat \u00b7 recommended</small></button>
+          <button class="mode-opt style-opt" type="button" data-style="legacy" aria-pressed="false" onclick="HF.setUiStyle('legacy')">Legacy<small>Glass and particles</small></button>
+        </div>
         <h4>Theme</h4>
-        <p class="panel-sub">Theme and mode change right away.</p>
         <div class="theme-section-label">Mode</div>
         <div class="mode-switch" role="group" aria-label="Mode">
           <button class="mode-opt" type="button" data-mode="dark" aria-pressed="false" onclick="HF.setThemeMode('dark')">Dark</button>
@@ -711,7 +892,12 @@ body.hf-generating .msg-actions{display:none}
             <select id="voiceSetting"><option value="">System default</option></select>
             <button class="link-btn" type="button" onclick="HF.playVoiceSample()"><i class="fas fa-volume-high" aria-hidden="true"></i> Play</button>
           </div>
-          <span class="setting-hint">Uses the voices installed in Windows. More can be added in Windows Settings &gt; Time &amp; language &gt; Speech.</span>
+          <span class="setting-hint" id="voiceQualityHint" hidden>Windows' basic voices sound robotic. For far more natural speech, install Windows 11's natural voices: <b>Settings &gt; Accessibility &gt; Narrator &gt; Add natural voices</b>, then reopen HyperFlux.</span>
+        </div>
+        <div class="setting-row">
+          <label for="voiceSpeedSetting">Speed <span class="setting-value" id="voiceSpeedValue"></span></label>
+          <input id="voiceSpeedSetting" type="range" min="0.6" max="1.4" step="0.05" oninput="updateVoiceSpeedLabel()">
+          <div class="range-ends"><span>Slower</span><span>Faster</span></div>
         </div>
         <h4>Image input</h4>
         <div class="setting-row">
@@ -845,6 +1031,7 @@ function animateCanvas(timestamp) {
 }
 
 function resumeCanvasAnimation() {
+  if (document.body.classList.contains('style-modern')) return;  // no particles in the modern style
   if (!document.hidden && !isGenerating && canvasFrameRequest === null) {
     canvasFrameRequest = requestAnimationFrame(animateCanvas);
   }
@@ -867,6 +1054,7 @@ resumeCanvasAnimation();
 document.addEventListener('DOMContentLoaded', function() {
   applyThemeChoice();
   applyPersonalization();
+  try { if (localStorage.getItem('hfx_sidebar') === 'hidden') document.body.classList.add('sb-collapsed'); } catch (error) {}
   refreshSettingsForm();
   refreshPersonalizationForm();
   updateGreeting();
@@ -1397,6 +1585,11 @@ function renderRandomFeatureDemo(animate) {
   if (animate) restartAnimation(document.querySelector('.demo-content'), 'demo-switching');
 }
 
+function renderWhatsNewButton() {
+  var label = $('whatsNewLabel');
+  if (label && releaseNotes[0]) label.textContent = releaseNotes[0].title;
+}
+
 function renderReleaseNotes(animate) {
   var noteSet = releaseNotes[currentReleaseIndex];
   var title = $('releaseTitle');
@@ -1432,7 +1625,8 @@ function changeReleaseNotes(direction) {
 }
 
 function loadPersonalization() {
-  var defaults = {displayName: '', accentColor: '', textSize: 'medium', persona: 'default', customInstructions: '', voice: ''};
+  var defaults = {displayName: '', accentColor: '', textSize: 'medium', persona: 'default', customInstructions: '',
+                  voice: '', voiceRate: 1, uiStyle: 'modern'};
   try {
     var saved = JSON.parse(localStorage.getItem('hfx_personalization') || '{}');
     var accentColor = typeof saved.accentColor === 'string' && /^#[0-9a-f]{6}$/i.test(saved.accentColor)
@@ -1447,7 +1641,9 @@ function loadPersonalization() {
       textSize: ['small', 'medium', 'large'].indexOf(saved.textSize) >= 0 ? saved.textSize : defaults.textSize,
       persona: PERSONAS[saved.persona] ? saved.persona : defaults.persona,
       customInstructions: typeof saved.customInstructions === 'string' ? saved.customInstructions.slice(0, MAX_CUSTOM_INSTRUCTIONS) : '',
-      voice: typeof saved.voice === 'string' ? saved.voice : ''
+      voice: typeof saved.voice === 'string' ? saved.voice : '',
+      voiceRate: Number.isFinite(Number(saved.voiceRate)) ? Math.min(1.4, Math.max(0.6, Number(saved.voiceRate))) : 1,
+      uiStyle: saved.uiStyle === 'legacy' ? 'legacy' : defaults.uiStyle
     };
   } catch (error) {
     return defaults;
@@ -1525,7 +1721,20 @@ function applyTheme(theme) {
   return nextTheme;
 }
 
+// "modern" is flat and calm; "legacy" keeps the glass panels and the particle background.
+function applyUiStyle() {
+  var modern = personalization.uiStyle !== 'legacy';
+  document.body.classList.toggle('style-modern', modern);
+  document.body.classList.toggle('style-legacy', !modern);
+  document.querySelectorAll('.style-opt').forEach(function(button) {
+    button.setAttribute('aria-pressed', (button.dataset.style === 'legacy') === !modern ? 'true' : 'false');
+  });
+  if (modern) pauseCanvasAnimation();
+  else resumeCanvasAnimation();
+}
+
 function applyPersonalization() {
+  applyUiStyle();
   var scale = {small: '0.9', medium: '1', large: '1.12'}[personalization.textSize] || '1';
   document.body.style.setProperty('--ui-scale', scale);
   // Clear any previous custom accent so the theme's own colours show through.
@@ -1594,8 +1803,8 @@ function updateServerStatus(connected, detail) {
   dot.classList.toggle('checking', false);
   dot.classList.toggle('offline', !connected);
   label.textContent = connected
-    ? 'Kobold - HyperFlux Server Connected (5001)' + (detail ? ' · ' + detail : '')
-    : 'Not connected to Kobold - HyperFlux Server (5001)';
+    ? 'Ready' + (detail ? ' \u00b7 ' + String(detail).replace(/^koboldcpp\//, '') : '')
+    : 'Model server not connected';
   if (modelSwitch) {
     dot.classList.add('checking');
     label.textContent = 'Loading ' + modelSwitch.name + '… ' +
@@ -1806,6 +2015,14 @@ function closeServerLogs() {
 }
 
 document.addEventListener('keydown', function(event) {
+  if ((event.ctrlKey || event.metaKey) && (event.key === 'k' || event.key === 'K')) {
+    event.preventDefault();
+    document.body.classList.remove('sb-collapsed');
+    document.body.classList.add('sb-open');
+    var search = $('histSearch');
+    if (search) { search.focus(); search.select(); }
+    return;
+  }
   if (event.key === 'Escape' && $('serverLogsOvl').classList.contains('vis')) {
     closeServerLogs();
   }
@@ -2177,6 +2394,23 @@ function dropOldestPicture() {
   return false;
 }
 
+// When a chat was last used: its "updated" time, or the time in its id (sess_<ms>).
+function chatTime(session) {
+  if (session.updated) return session.updated;
+  var match = /^sess_(\d{12,})$/.exec(session.id || '');
+  return match ? Number(match[1]) : 0;
+}
+
+function chatGroup(time) {
+  if (!time) return 'Older';
+  var now = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (time >= today) return 'Today';
+  if (time >= today - 86400000) return 'Yesterday';
+  if (time >= today - 6 * 86400000) return 'Previous 7 days';
+  return 'Older';
+}
+
 function sessionMatches(session, query) {
   if (!query) return true;
   if (String(session.title || '').toLowerCase().indexOf(query) >= 0) return true;
@@ -2228,9 +2462,18 @@ function renderHistoryList() {
     list.innerHTML = '<div class="hist-empty">No chats match</div>';
     return;
   }
+  var lastGroup = null;
   shown.forEach(function(s) {
+    var group = chatGroup(chatTime(s));
+    if (group !== lastGroup) {
+      var heading = mk('div', 'h-group');
+      heading.textContent = group;
+      list.appendChild(heading);
+      lastGroup = group;
+    }
     var idx = sessions.indexOf(s);
-    var item = mk('div', 'h-item');
+    var item = mk('div', 'h-item' + (s.id === currentSessionId ? ' active' : ''));
+    if (s.id === currentSessionId) item.setAttribute('aria-current', 'true');
     item.tabIndex = 0;
     item.setAttribute('role', 'group');
     item.setAttribute('aria-label', 'Recent chat: ' + (s.title || 'Chat ' + (idx + 1)));
@@ -2277,6 +2520,7 @@ function loadSession(id) {
   if (!sess) return;
   stopSpeech();
   currentSessionId = id;
+  renderHistoryList();
   
   $('homeView').style.display = 'none';
   $('chatCard').classList.remove('home-active');
@@ -2286,6 +2530,7 @@ function loadSession(id) {
 
   sess.messages.forEach(function(m) {
     appendMsgToDOM(m.role, m.content, m.attachment, m.reasoning, m.reasoningSeconds, m.model);
+    if (feed.lastElementChild) feed.lastElementChild.classList.add('loaded');  // saved: no fade-in
     if (m.runtime && feed.lastElementChild) feed.lastElementChild.classList.add('runtime');
   });
   feed.scrollTop = feed.scrollHeight;
@@ -2618,20 +2863,40 @@ function splitAssistantResponse(text, allowReasoning) {
 // thinking: {active: still thinking, seconds: how long it thought}.
 // The box is open while the model thinks and closes when the answer starts,
 // unless the user opened or closed it themselves.
-function buildThinkingIndicator(label, includeDots) {
+var SHIMMER_MS = 2600;  // keep in step with the hfShimmer animation in the CSS
+
+// Start the shimmer at the phase a continuous one would be at now, so rebuilding the
+// label (a new status line, a redrawn reply box) is invisible instead of a restart.
+function syncShimmer(label) {
+  if (!label || label.dataset.shimmer === 'on') return;
+  label.dataset.shimmer = 'on';
+  label.style.animationDelay = '-' + ((Date.now() % SHIMMER_MS) / 1000).toFixed(3) + 's';
+}
+
+function stopShimmer(label) {
+  if (!label) return;
+  delete label.dataset.shimmer;
+  label.style.animationDelay = '';
+}
+
+// One animation for both waiting states: the words shimmer while HyperFlux is busy.
+// The element is reused between frames, so the shimmer runs smoothly instead of restarting.
+function buildThinkingIndicator(label, live) {
   var wrap = mk('span', 'thinking-indicator');
-  var orb = mk('span', 'thinking-orb');
-  orb.setAttribute('aria-hidden', 'true');
-  var text = mk('span');
+  var text = mk('span', 'ti-label' + (live ? ' hf-live' : ''));
   text.textContent = label;
-  wrap.append(orb, text);
-  if (includeDots) {
-    var dots = mk('span', 'generation-dots');
-    dots.setAttribute('aria-hidden', 'true');
-    dots.append(mk('i'), mk('i'), mk('i'));
-    wrap.appendChild(dots);
-  }
+  if (live) syncShimmer(text);
+  wrap.appendChild(text);
   return wrap;
+}
+
+function setIndicatorState(indicator, label, live) {
+  var text = indicator.querySelector('.ti-label');
+  if (!text) return;
+  if (text.textContent !== label) text.textContent = label;
+  text.classList.toggle('hf-live', !!live);
+  if (live) syncShimmer(text);
+  else stopShimmer(text);
 }
 
 function renderAssistantContent(contentNode, text, reasoning, streaming, thinking) {
@@ -2663,28 +2928,12 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
       reasoningText = mk('div', 'reasoning-summary');
       details.appendChild(reasoningText);
     }
+    var thinkingLabel = thinking.active
+      ? 'Thinking'
+      : (Number.isFinite(thinking.seconds) ? 'Thought for ' + formatThoughtSeconds(thinking.seconds) : 'Thinking');
     var existingIndicator = summary.querySelector('.thinking-indicator');
-    var indicator = existingIndicator || buildThinkingIndicator(
-      thinking.active
-        ? 'Thinking'
-        : (Number.isFinite(thinking.seconds) ? 'Thought for ' + formatThoughtSeconds(thinking.seconds) : 'Thinking'),
-      thinking.active
-    );
-    var indicatorLabel = indicator.querySelector('span:nth-child(2)');
-    if (indicatorLabel) {
-      indicatorLabel.textContent = thinking.active
-        ? 'Thinking'
-        : (Number.isFinite(thinking.seconds) ? 'Thought for ' + formatThoughtSeconds(thinking.seconds) : 'Thinking');
-    }
-    var existingDots = indicator.querySelector('.generation-dots');
-    if (thinking.active && !existingDots) {
-      var dots = mk('span', 'generation-dots');
-      dots.setAttribute('aria-hidden', 'true');
-      dots.append(mk('i'), mk('i'), mk('i'));
-      indicator.appendChild(dots);
-    } else if (!thinking.active && existingDots) {
-      existingDots.remove();
-    }
+    var indicator = existingIndicator || buildThinkingIndicator(thinkingLabel, thinking.active);
+    setIndicatorState(indicator, thinkingLabel, thinking.active);
     if (!existingIndicator) summary.appendChild(indicator);
     if (!summary.dataset.thinkingChoiceBound) {
       summary.dataset.thinkingChoiceBound = 'true';
@@ -2718,11 +2967,14 @@ function renderAssistantContent(contentNode, text, reasoning, streaming, thinkin
   } else {
     answer.innerHTML = renderMarkdown(text);
   }
-  contentNode.replaceChildren();
-  if (reasoning) {
-    contentNode.appendChild(details);
-  }
-  contentNode.appendChild(answer);
+  // Only move what actually moved: taking a node out of the page and putting it back
+  // restarts its CSS animation, which made the shimmer stutter on every streamed frame.
+  Array.prototype.slice.call(contentNode.children).forEach(function(child) {
+    if (child !== answer && (!reasoning || child !== details)) child.remove();
+  });
+  if (reasoning && details.parentElement !== contentNode) contentNode.appendChild(details);
+  if (answer.parentElement !== contentNode) contentNode.appendChild(answer);
+  if (reasoning && answer.previousElementSibling !== details) contentNode.insertBefore(details, answer);
   contentNode.style.minHeight = '';
 }
 
@@ -2897,6 +3149,51 @@ function appendLocalCommand(command, result) {
   $('feed').lastElementChild.classList.add('runtime');
 }
 
+// ---- Chat names ---------------------------------------------------------------------------
+// After the first answer, Apex 1 suggests a short title. The request continues the same
+// conversation the model has just read, so KoboldCpp reuses its cached work: it costs a few
+// seconds and doesn't slow the next message. If it fails, the first words of the question stay.
+var TITLE_REQUEST = 'Write a short title (2 to 6 words) for this conversation so far. Reply with the title only: no quotes, no full stop.';
+
+function cleanTitle(text) {
+  var title = String(text || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/^\s*(?:title\s*:)\s*/i, '')
+    .replace(/[*_`"\u201c\u201d#]/g, '')
+    .split('\n')[0]
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.!?,;:]+$/, '');
+  var words = title.split(' ').slice(0, 8).join(' ');
+  return words.length > 48 ? words.slice(0, 47).replace(/\s+\S*$/, '') + '\u2026' : words;
+}
+
+async function nameChat(sess, modelId) {
+  sess.titled = true;  // once only, even if it fails
+  try {
+    var history = sess.messages.filter(function(m) { return !m.runtime; });
+    var prompt = buildSessionPrompt(history, TITLE_REQUEST, null, true, modelId);
+    var payload = {
+      prompt: prompt, max_context_length: effectiveContextLength(), max_length: 20, temperature: 0.3,
+      top_p: 0.9, rep_penalty: 1.05, stop_sequence: ['<turn|>', '<|turn>', '\n'],
+      genkey: 'HFXT' + Date.now().toString(36)
+    };
+    if (promptImage) payload.images = [promptImage.image.split(',')[1]];
+    var response = await fetch('http://localhost:5001/api/v1/generate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+    });
+    var data = await response.json();
+    var title = cleanTitle(data.results && data.results[0] && data.results[0].text);
+    if (!title || title.length < 3) return;
+    sess.title = title;
+    saveSessions();
+    var item = document.querySelector('.h-item[aria-current="true"]');
+    if (item && sess.id === currentSessionId) item.classList.add('renamed');
+  } catch (error) {
+    // No name from the model: keep the start of the question as the title.
+  }
+}
+
 // ---- Web research (the bridge does the work; see hyperflux/search/research.py) -------------
 // 1 decide -> 2 write queries -> 3 search -> 4 read pages -> 5 keep the best paragraphs ->
 // 6 answer from numbered sources -> 7 if they don't answer it, one more round, then stop.
@@ -2922,7 +3219,22 @@ async function postBridge(path, body, signal, timeoutMs) {
 }
 
 function setResearchStatus(node, text) {
-  if (node) node.textContent = text;
+  if (!node) return;
+  var label = node.querySelector('.ti-label');
+  if (label) {
+    if (label.textContent !== text) label.textContent = text;
+    label.classList.add('hf-live');
+    syncShimmer(label);
+    return;
+  }
+  node.textContent = '';
+  var answer = mk('div', 'assistant-answer');
+  var status = mk('div', 'generation-status');
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.appendChild(buildThinkingIndicator(text, true));
+  answer.appendChild(status);
+  node.appendChild(answer);
 }
 
 // Returns {queries, sources, prompt} to answer from, or null when no search is needed.
@@ -2961,6 +3273,15 @@ async function startResearch(prompt, statusNode, signal, previous) {
   setResearchStatus(statusNode, 'Read ' + found.data.pages_read + ' page' + (found.data.pages_read === 1 ? '' : 's') +
     '. Writing an answer from ' + found.data.sources.length + ' sources...');
   return {queries: tried, sources: found.data.sources, prompt: found.data.prompt};
+}
+
+// Some answers end with their own "Sources" list even though the prompt says not to.
+// HyperFlux adds the real one from the pages it read, so drop the model's copy.
+function stripModelSources(text) {
+  return String(text || '').replace(
+    /\n+\s*(?:\*\*|#{1,4}\s*)?(?:sources?|references?|citations?)\b\s*:?\s*(?:\*\*)?\s*\n(?:[^\n]*\n?)*$/i,
+    function(block) { return /\[?\d\]?[.)]|https?:\/\//.test(block) ? '' : block; }
+  ).trimEnd();
 }
 
 // Same as sources_footer() in research.py: the sources the answer cites.
@@ -3263,22 +3584,56 @@ function speechText(markdown) {
     .trim();
 }
 
+// Windows' older built-in voices (David, Zira...) sound robotic. Windows 11's "natural"
+// voices sound far better, so list those first when they are installed.
+function isNaturalVoice(voice) {
+  return /natural|neural|online/i.test(voice.name || '');
+}
+
 function fillVoiceList() {
   var select = $('voiceSetting');
   if (!select || !('speechSynthesis' in window)) return;
-  var voices = speechSynthesis.getVoices();
+  var voices = speechSynthesis.getVoices().slice();
   select.textContent = '';
   var none = document.createElement('option');
   none.value = '';
   none.textContent = 'System default';
   select.appendChild(none);
-  voices.forEach(function(voice) {
-    var option = document.createElement('option');
-    option.value = voice.name;
-    option.textContent = voice.name;
-    select.appendChild(option);
+  var groups = [
+    {label: 'Natural voices', list: voices.filter(isNaturalVoice)},
+    {label: 'Basic voices', list: voices.filter(function(v) { return !isNaturalVoice(v); })}
+  ];
+  groups.forEach(function(group) {
+    if (!group.list.length) return;
+    var holder = document.createElement('optgroup');
+    holder.label = group.label;
+    group.list.forEach(function(voice) {
+      var option = document.createElement('option');
+      option.value = voice.name;
+      option.textContent = voice.name.replace(/^Microsoft\s+/, '').replace(/\s*-\s*/, ' \u00b7 ');
+      holder.appendChild(option);
+    });
+    select.appendChild(holder);
   });
   select.value = voices.some(function(v) { return v.name === personalization.voice; }) ? personalization.voice : '';
+  var hint = $('voiceQualityHint');
+  if (hint) {
+    hint.hidden = voices.some(isNaturalVoice);
+  }
+  var speed = $('voiceSpeedSetting');
+  if (speed) {
+    speed.value = personalization.voiceRate;
+    updateVoiceSpeedLabel();
+  }
+}
+
+function updateVoiceSpeedLabel() {
+  var value = Number($('voiceSpeedSetting').value);
+  $('voiceSpeedValue').textContent = value.toFixed(2) + '\u00d7' + (value === 1 ? ' \u00b7 normal' : '');
+}
+
+function speakingVoice() {
+  return speechSynthesis.getVoices().find(function(v) { return v.name === personalization.voice; });
 }
 if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = fillVoiceList;
 
@@ -3297,7 +3652,7 @@ function toggleSpeech(markdown, button) {
   if (same) return;
   var text = speechText(markdown);
   if (!text) return;
-  var voice = speechSynthesis.getVoices().find(function(v) { return v.name === personalization.voice; });
+  var voice = speakingVoice();
   // Long utterances can stop early in Chromium, so speak sentence-sized pieces.
   var pieces = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
   var chunks = [];
@@ -3311,6 +3666,7 @@ function toggleSpeech(markdown, button) {
   chunks.forEach(function(chunk, index) {
     var utterance = new SpeechSynthesisUtterance(chunk);
     if (voice) utterance.voice = voice;
+    utterance.rate = personalization.voiceRate;
     if (index === chunks.length - 1) {
       utterance.onend = function() { if (speakingButton === button) stopSpeech(); };
     }
@@ -3416,6 +3772,7 @@ var HF = (function(){
     newChat: function(){ 
       stopSpeech();
       currentSessionId = null;
+      renderHistoryList();
       var f = $('feed'); if (f) { f.innerHTML = ''; f.classList.remove('vis'); }
       var h = $('homeView');
       if (h) {
@@ -3473,6 +3830,27 @@ var HF = (function(){
       $('settingsOvl').classList.remove('vis');
     },
     showSettingsTab: showSettingsTab,
+    quickStart: function(kind){
+      var starters = {
+        explain: 'Explain in simple words: ',
+        code: 'Write code that ',
+        search: '/search '
+      };
+      if (kind === 'picture') { this.pickFile('What is in this picture?'); return; }
+      var box = $('homeInp');
+      box.value = starters[kind] || '';
+      autoGrow(box);
+      box.focus();
+      box.setSelectionRange(box.value.length, box.value.length);
+    },
+    toggleSidebar: function(){
+      var narrow = window.matchMedia('(max-width: 760px)').matches;
+      var cls = narrow ? 'sb-open' : 'sb-collapsed';
+      document.body.classList.toggle(cls);
+      if (!narrow) {
+        try { localStorage.setItem('hfx_sidebar', document.body.classList.contains('sb-collapsed') ? 'hidden' : 'shown'); } catch (error) {}
+      }
+    },
     resetModelSettings: function(){
       $('temperatureSetting').value = 0.7;
       $('lengthSetting').value = 4096;
@@ -3486,6 +3864,7 @@ var HF = (function(){
       var utterance = new SpeechSynthesisUtterance("Hi, I'm HyperFlux. This is how I'll read your answers.");
       var voice = speechSynthesis.getVoices().find(function(v) { return v.name === $('voiceSetting').value; });
       if (voice) utterance.voice = voice;
+      utterance.rate = Number($('voiceSpeedSetting').value) || 1;
       speechSynthesis.speak(utterance);
     },
     // Saves every tab at once. Problems are shown next to the buttons, on the right tab.
@@ -3515,7 +3894,9 @@ var HF = (function(){
         textSize: ['small', 'medium', 'large'].indexOf($('textSizeSetting').value) >= 0 ? $('textSizeSetting').value : 'medium',
         persona: PERSONAS[$('personaSetting').value] ? $('personaSetting').value : 'default',
         customInstructions: $('customInstructionsSetting').value.trim().slice(0, MAX_CUSTOM_INSTRUCTIONS),
-        voice: $('voiceSetting').value
+        voice: $('voiceSetting').value,
+        voiceRate: Number($('voiceSpeedSetting').value) || 1,
+        uiStyle: personalization.uiStyle
       };
       savePersonalization();
       applyPersonalization();
@@ -3594,6 +3975,11 @@ var HF = (function(){
       if (THEME_FAMILIES.indexOf(family) < 0) return;
       themeChoice.family = family;
       applyThemeChoice();
+    },
+    setUiStyle: function(style){
+      personalization.uiStyle = style === 'legacy' ? 'legacy' : 'modern';
+      savePersonalization();
+      applyUiStyle();
     },
     setThemeMode: function(mode){
       if (['dark', 'light', 'system'].indexOf(mode) < 0) return;
@@ -3733,7 +4119,7 @@ var HF = (function(){
 
       if (!currentSessionId) {
         currentSessionId = 'sess_' + Date.now();
-        sessions.unshift({ id: currentSessionId, title: prompt.slice(0, 24) + '...', messages: [] });
+        sessions.unshift({ id: currentSessionId, title: cleanTitle(prompt.length > 40 ? prompt.slice(0, 40).replace(/\s+\S*$/, '') + '\u2026' : prompt) || 'New chat', messages: [] });
       }
 
       var sess = sessions.find(function(s) { return s.id === currentSessionId; });
@@ -3750,6 +4136,8 @@ var HF = (function(){
       var requestSessionId = currentSessionId;
       var sessionHistory = sess.messages.slice();
       sess.messages.push({ role: 'user', content: prompt, attachment: attachment });
+      sess.updated = Date.now();
+      if (sessions[0] !== sess) { sessions.splice(sessions.indexOf(sess), 1); sessions.unshift(sess); }
       saveSessions();
 
       appendMsgToDOM('user', prompt, attachment);
@@ -3762,9 +4150,10 @@ var HF = (function(){
         '<div class="a-ava" aria-hidden="true"><img class="flash-model-logo-img" src="logo_hyperflux/hyperfluxdesktop.png" alt=""></div>' +
         '<div class="a-body">' +
           '<div class="a-head"><span class="a-name">HyperFlux</span><span class="a-badge">' + MODEL_TIERS[requestModel].short + '</span></div>' +
-          '<div class="a-card"><div class="a-content" id="content-' + aiRowId + '"><div class="generation-status" role="status" aria-live="polite"><span class="thinking-indicator"><span class="thinking-orb" aria-hidden="true"></span><span>Preparing a response</span><span class="generation-dots" aria-hidden="true"><i></i><i></i><i></i></span></span></div></div></div>' +
+          '<div class="a-card"><div class="a-content" id="content-' + aiRowId + '"><div class="assistant-answer"><div class="generation-status" role="status" aria-live="polite"><span class="thinking-indicator"><span class="ti-label hf-live">Preparing a response</span></span></div></div></div></div>' +
         '</div>';
       feed.appendChild(aiNode);
+      syncShimmer(aiNode.querySelector('.ti-label'));
       feed.scrollTop = feed.scrollHeight;
 
       try {
@@ -3896,7 +4285,10 @@ var HF = (function(){
         research = retry;
         modelPrompt = research.prompt;
         }
-        if (research) reply += sourcesFooter(reply, research.sources);
+        if (research) {
+          reply = stripModelSources(reply);
+          reply += sourcesFooter(reply, research.sources);
+        }
 
         var finalContentNode = document.getElementById('content-' + aiRowId);
         if (currentSessionId === requestSessionId && finalContentNode) {
@@ -3917,6 +4309,10 @@ var HF = (function(){
         });
         saveSessions();
         finalizeAiNode(document.getElementById(aiRowId), reply);
+        // A new chat gets a proper name once its first answer is in (like modern assistants).
+        if (!sess.titled && sess.messages.filter(function(m) { return m.role === 'ai' && !m.runtime; }).length === 1) {
+          nameChat(sess, requestModel);
+        }
         // The Copy/Retry bar adds height below the answer; stay at the very end.
         if (stickAtEnd) feed.scrollTop = feed.scrollHeight;
 
