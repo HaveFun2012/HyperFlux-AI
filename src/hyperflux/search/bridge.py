@@ -7,6 +7,7 @@ import hmac
 import json
 import re
 import secrets
+import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -14,10 +15,12 @@ from urllib.parse import parse_qs, urlsplit
 
 import requests
 
+from hyperflux.desktop import ocr
 from hyperflux.paths import BRIDGE_TOKEN_PATH, KOBOLD_LOG_PATH
 from hyperflux.search import research
 
 _LOG_TAIL_BYTES = 64 * 1024
+OCR_REQUEST_LIMIT = 34 * 1024 * 1024  # a 25 MB picture as base64 inside JSON
 # Blocks DNS-rebinding pages, which reach 127.0.0.1 under their own host name.
 _ALLOWED_HOSTS = re.compile(r"(?:localhost|127\.0\.0\.1)(?::\d+)?", re.IGNORECASE)
 
@@ -55,6 +58,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
     log_token = ""
     model_manager = None  # desktop app only: lists and switches local models
     vision_manager = None  # desktop app only: downloads the image-input file
+    image_helper = None  # desktop app only: the second, picture-reading server
     update_manager = None  # installed desktop app only: offers and installs updates
 
     def _host_is_allowed(self):
@@ -109,7 +113,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         if route == "/health":
             self._send_json(200, {"status": "ok", "service": "HyperFlux search"})
             return
-        if route not in ("/kobold-logs", "/local-models", "/vision", "/update"):
+        if route not in ("/kobold-logs", "/local-models", "/vision", "/update", "/image-helper"):
             self._send_json(404, {"error": "Not found."})
             return
         if not self._origin_is_allowed():
@@ -123,6 +127,12 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {"available": False})
             else:
                 self._send_json(200, self.update_manager.describe())
+            return
+        if route == "/image-helper":
+            if self.image_helper is None:
+                self._send_json(200, {"unavailable": True, "enabled": False, "status": "off"})
+            else:
+                self._send_json(200, self.image_helper.describe())
             return
         if route == "/vision":
             if self.vision_manager is None:
@@ -176,7 +186,8 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         route = urlsplit(self.path).path
         if route not in ("/search", "/research/plan", "/research/sources", "/research/tidy",
                          "/local-models/switch", "/vision/install", "/update/install", "/update/skip",
-                         "/update/prompted"):
+                         "/update/prompted", "/image-helper/enable", "/image-helper/disable",
+                         "/image-helper/wake", "/image-helper/used", "/image/read"):
             self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
@@ -202,6 +213,26 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         if route.startswith("/research/"):
             self._research(route)
+            return
+        if route == "/image/read":
+            self._read_image_text()
+            return
+        if route.startswith("/image-helper/"):
+            self._discard_body()
+            if not self._log_token_is_valid() or self.image_helper is None:
+                self._send_json(403, {"error": "The image helper is only available in the HyperFlux desktop app."})
+                return
+            action = route.rsplit("/", 1)[1]
+            if action == "used":
+                self.image_helper.touch()
+                self._send_json(200, {"ok": True})
+                return
+            if action == "wake":
+                self._send_json(200, {"accepted": self.image_helper.wake()})
+                return
+            accepted, message = (self.image_helper.request_enable() if action == "enable"
+                                 else self.image_helper.request_disable())
+            self._send_json(202 if accepted else 409, {"accepted": accepted, "message": message})
             return
         if route == "/vision/install":
             self._discard_body()
@@ -238,6 +269,31 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": results.removeprefix("SEARCH ERROR:").strip()})
             return
         self._send_json(200, {"query": optimized_query, "results": results})
+
+    def _read_image_text(self):
+        """/image/read {image: data URL} -> {text}: the text in a picture, read by Windows' own OCR."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        if not 1 <= length <= OCR_REQUEST_LIMIT:
+            self._discard_body()
+            self._send_json(413, {"error": "The picture must be smaller than 25 MB."})
+            return
+        body = self.rfile.read(length)
+        if not self._log_token_is_valid():
+            self._send_json(403, {"error": "Reading pictures is only available in the HyperFlux desktop app."})
+            return
+        try:
+            data = json.loads(body.decode("utf-8"))
+            text = ocr.read_data_url(data.get("image") if isinstance(data, dict) else None)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            self._send_json(400, {"error": str(error) or "Request body must be valid JSON."})
+            return
+        except (OSError, subprocess.SubprocessError) as error:
+            self._send_json(502, {"error": f"The text reader failed: {error}"})
+            return
+        self._send_json(200, {"text": text})
 
     def _research(self, route):
         """The web research pipeline, in two calls so the page can show each stage:
@@ -310,7 +366,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
 
 
 def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, log_token=None,
-                         model_manager=None, vision_manager=None, update_manager=None):
+                         model_manager=None, vision_manager=None, update_manager=None, image_helper=None):
     handler = type(
         "HyperFluxSearchBridgeHandler",
         (_SearchBridgeHandler,),
@@ -320,6 +376,7 @@ def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, lo
             "log_token": load_or_create_token() if log_token is None else log_token,
             "model_manager": model_manager,
             "vision_manager": vision_manager,
+            "image_helper": image_helper,
             "update_manager": update_manager,
         },
     )

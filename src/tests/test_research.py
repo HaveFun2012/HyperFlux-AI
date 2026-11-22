@@ -40,6 +40,11 @@ class DecideTests(unittest.TestCase):
             "How much is the iPhone 17 Pro vs iPhone 16 in Malaysia?": "yes",  # numbers in names
             "What was the population of Malaysia in 2020 and 2024?": "maybe",  # years
             "How much does an RTX 5090 cost in Malaysia?": "yes",
+            # talking about the chat or the model in use is not a lookup
+            "No right now you're Granite4 which I'm using, but the last time I used Qwen "
+            "it always output </turn>": "no",
+            "Granite 4 is annoying": "no",
+            "I want the latest NVIDIA drivers": "yes",
         }
         for question, expected in cases.items():
             self.assertEqual(research.search_need(question), expected, question)

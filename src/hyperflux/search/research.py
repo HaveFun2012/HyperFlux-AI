@@ -76,6 +76,18 @@ _PROPER_NOUN = re.compile(r"(?<!^)(?<![.!?]\s)\b[A-Z][a-zA-Z0-9]{2,}|\b[A-Za-z]+
 _CURRENCY = re.compile(r"(?:rm|myr|usd|sgd|\$|€|£|¥)\s?$", re.IGNORECASE)
 
 
+_ASKING = re.compile(
+    r"^(?:what|who|whom|whose|when|where|which|why|how|is|are|was|were|do|does|did|can|could|will|would|"
+    r"should|tell me|explain|compare|list|show me|give me|find|look up)\b", re.IGNORECASE)
+_CHAT_TALK = re.compile(
+    r"\b(?:i|i'm|i've|i'd|i'll|my|me|you|you're|you've|your|we|last time|earlier|before|previous|"
+    r"just now|btw|by the way|again|always|never)\b", re.IGNORECASE)
+
+
+_STRONG_LOOKUP = re.compile(r"\b(?:latest|news|price|prices|weather|patch|drivers|who won|release date|score)\b",
+                            re.IGNORECASE)
+
+
 def given_amounts(text):
     """Numbers the question supplies as amounts. Years (2024) and numbers that are part of
     a name (iPhone 17, RTX 5090, version 7.2) don't count; money always does."""
@@ -109,6 +121,11 @@ def search_need(question):
         or any(token in low for token in ("{", "}", "```"))
     ):
         return "no"  # coding help
+    asking = "?" in text or bool(_ASKING.match(low))
+    # Talking about the chat, the model or themselves ("right now you're Granite, last time
+    # Qwen printed </turn>") is not a lookup, even though it names things or says "right now".
+    if not asking and _CHAT_TALK.search(low) and not _STRONG_LOOKUP.search(low):
+        return "no"
     if routing.is_search_intent(low):
         return "yes"
     if routing.looks_like_arithmetic(low) or routing.is_math_request(low):
@@ -120,6 +137,8 @@ def search_need(question):
     named = bool(_PROPER_NOUN.search(text)) or bool(re.search(r"\b(?:genshin|honkai|minecraft|roblox|valorant)\b", low))
     if named and _FACT_WORDS.search(text):
         return "yes"
+    if named and not asking and not _SPECIFIC_WORDS.search(text):
+        return "no"  # a name alone, said as a statement, is not a question
     if _SPECIFIC_WORDS.search(text) or named:
         return "maybe"
     return "no"
@@ -784,7 +803,9 @@ def build_answer_prompt(question, context):
     today = datetime.now().astimezone().strftime("%A, %d %B %Y")
     return (
         f"Current date: {today}\n"
-        "Answer the question using only the numbered web sources below for current or specific facts. "
+        "Answer the question using the numbered web sources below for current or specific facts, but only "
+        "the sources that actually relate to the question; ignore the rest, and if none relate, answer "
+        "from your own knowledge and say that the search found nothing relevant. "
         "Explain how each part works, with the key numbers; don't just name features. "
         "Write naturally, as you normally would: start with the answer, use plain paragraphs, and use a "
         "list only for real steps or options. Cite sources like [1] or [2] once per paragraph, not after "

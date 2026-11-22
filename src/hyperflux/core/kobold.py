@@ -128,7 +128,7 @@ _STRAY_MARKERS = re.compile(
 )
 # End-of-reply tokens, removed only at the end so a code example keeping "</s>" is safe.
 _TRAILING_END = re.compile(
-    r"(?:\s*(?:</s>|<\|endoftext\|>|<\|eot_id\|>|<\|im_end\|>|<end_of_turn>|<\|end\|>))+\s*$",
+    r"(?:\s*(?:</s>|<\|endoftext\|>|<\|eot_id\|>|<\|im_end\|>|<end_of_turn>|</turn>|</?turn\|>|<\|end\|>))+\s*$",
     re.IGNORECASE,
 )
 

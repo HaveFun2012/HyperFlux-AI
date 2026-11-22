@@ -28,6 +28,7 @@ from hyperflux.desktop.model_switcher import LocalModels
 from hyperflux.desktop.process_tree import descendant_pids, terminate_pid
 from hyperflux.desktop.runtime_assets import save_config, vision_file_for
 from hyperflux.desktop.update_bar import UpdateBar
+from hyperflux.desktop.image_helper import ImageHelper
 from hyperflux.desktop.vision import VisionInstaller
 from hyperflux.search.bridge import load_or_create_token
 from hyperflux.paths import (
@@ -67,6 +68,9 @@ class HyperFluxWindow(QMainWindow):
         self._kobold_alive = False
         self.local_models = None
         self.vision = None
+        self.image_helper = None
+        self._helper_process = None
+        self._helper_timer = None
         self._check_updates = check_updates
         self.setWindowTitle("HyperFlux AI")
         self.resize(1360, 900)
@@ -209,6 +213,16 @@ class HyperFluxWindow(QMainWindow):
             parent=self,
         )
         self.vision.restart_requested.connect(self._restart_kobold)
+        # The image helper: a second, small server that looks at pictures for models that can't.
+        self.image_helper = ImageHelper(
+            main_model_is_vision=lambda: vision_file_for(self.runtime_config["model_path"]) is not None,
+            parent=self,
+        )
+        self.image_helper.start_requested.connect(self._start_helper)
+        self.image_helper.stop_requested.connect(self._stop_helper)
+        self._helper_timer = QTimer(self)
+        self._helper_timer.timeout.connect(self.image_helper.sleep_if_idle)
+        self._helper_timer.start(60 * 1000)
 
         self._search_thread = threading.Thread(
             target=self._run_search_bridge,
@@ -237,6 +251,40 @@ class HyperFluxWindow(QMainWindow):
         self._kobold_process.start(executable, arguments)
         if self._kobold_process.state() == QProcess.ProcessState.NotRunning:
             self._kobold_alive = False
+
+    def _start_helper(self):
+        if self._helper_process is not None and self._helper_process.state() != QProcess.ProcessState.NotRunning:
+            return
+        arguments = self.image_helper.start_arguments()
+        if arguments is None:
+            self.image_helper.finish_with_error("The image helper's files are missing. Turn it off and on again to download them.")
+            return
+        log_path = KOBOLD_LOG_PATH.with_name("kobold-helper.log")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        process = QProcess(self)
+        process.setWorkingDirectory(str(user_data_directory()))
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        process.setStandardOutputFile(str(log_path))
+        process.finished.connect(lambda *_: self._helper_finished(process))
+        process.errorOccurred.connect(lambda *_: self._helper_finished(process))
+        self._helper_process = process
+        process.start(self.runtime_config["kobold_path"], arguments)
+        if process.state() == QProcess.ProcessState.NotRunning:
+            self.image_helper.finish_with_error("The image helper could not start. See kobold-helper.log.")
+            self.image_helper.set_running(False)
+        else:
+            self.image_helper.set_running(True)
+
+    def _helper_finished(self, process):
+        if process is self._helper_process and not self._shutting_down:
+            self.image_helper.set_running(False)
+
+    def _stop_helper(self):
+        process = self._helper_process
+        self.image_helper.set_running(False)
+        if process is None or process.state() == QProcess.ProcessState.NotRunning:
+            return
+        self._stop_process(process)
 
     def _kobold_running(self):
         # Read from the bridge thread, so it reads a flag the window thread keeps.
@@ -301,7 +349,9 @@ class HyperFluxWindow(QMainWindow):
         )
 
     def _stop_kobold(self):
-        process = self._kobold_process
+        self._stop_process(self._kobold_process)
+
+    def _stop_process(self, process):
         if process is None or process.state() == QProcess.ProcessState.NotRunning:
             return
         # The real server is a child of the launcher we started. Stop it first so
@@ -328,6 +378,7 @@ class HyperFluxWindow(QMainWindow):
                 Config.SEARCH_RESULT_COUNT,
                 model_manager=self.local_models,
                 vision_manager=self.vision,
+                image_helper=self.image_helper,
                 # The page asks about updates (popup, then a sidebar card) through the bridge.
                 update_manager=self.update_bar if self._check_updates else None,
             )
@@ -347,5 +398,7 @@ class HyperFluxWindow(QMainWindow):
         if self._search_server is not None:
             self._search_server.shutdown()
             self._search_server.server_close()
+        if self._helper_process is not None:
+            self._stop_process(self._helper_process)
         self._stop_kobold()
         super().closeEvent(event)

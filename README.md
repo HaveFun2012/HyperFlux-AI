@@ -19,6 +19,7 @@ Riddles and real-world "what happens if" questions think automatically even with
 **In the desktop app:**
 
 - **Pictures:** attach a photo or screenshot with the paperclip and ask about it, including follow-up questions. HyperFlux keeps seeing the latest picture in the chat. Before sending, you can drag a box around the part that matters, such as small text, so it reaches the model much larger. If HyperFlux can't read something in a picture, it says so instead of guessing. Turn this on once in **Settings → Voice & pictures**, which downloads the vision file for your Gemma 4 E2B or E4B model (about 1 GB).
+- **Pictures with any model:** a model that can't see (Granite, Qwen...) still gets your picture. HyperFlux reads its text with the OCR built into Windows (offline, nothing to install; small text is enlarged and read again) and passes it on as notes, so screenshots, coordinates, receipts and error messages work out of the box. For questions about what is *in* a picture, such as the background, colours or objects, turn on the **image helper** in **Settings → Voice & pictures**: a second, small server (Gemma 4 E2B, up to about 4.4 GB one-time download, less if you already have the Gemma 4 E2B model) that runs on the CPU, looks at the picture with your question in mind, and tells the main model what it sees. It starts only when a picture needs it, sleeps after 10 idle minutes, and is refused on PCs with less than 8 GB of RAM. While it is on, **both servers show in the top bar**. Text questions go straight to OCR and scene questions straight to the helper; if neither can answer, HyperFlux says so right away instead of making you wait.
 - **Read aloud:** a **Read aloud** button under every answer speaks it with the Windows voices; the voice is chosen (and can be tried) in **Settings → Voice & pictures**.
 - **Custom instructions:** tell HyperFlux about yourself once (**Settings → Personal**, up to 1,500 characters), and it is sent with every message.
 - **Personas:** Default, Tutor, Coder, Concise or Friendly change the tone (**Settings → Personal** or `/persona tutor`).
@@ -49,6 +50,8 @@ src/
     terminal/              Rich terminal interface       (python -m hyperflux.terminal)
     desktop/               Qt desktop window + setup     (python -m hyperflux.desktop)
                            vision.py downloads the image-input file and reloads KoboldCpp
+                           image_helper.py runs the optional second (picture-reading) server
+                           ocr.py reads picture text with Windows OCR (PowerShell)
   web/                     HyperFlux Web.html and logo_hyperflux/ images
   data/                    hf_brain.json (local canned answers)
   scripts/                 setup_assets.ps1, Run_HyperFlux_Terminal.bat, Start_HyperFlux_Server.bat,
