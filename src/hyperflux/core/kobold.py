@@ -121,14 +121,14 @@ _THOUGHT_BLOCKS = (
 # tags other models use: <answer>...</answer> around the reply (DeepSeek R1 style), and
 # chat tokens that leak into the text (ChatML, Llama, GLM).
 _STRAY_MARKERS = re.compile(
-    r"<\|channel>|<channel\|>|</?think(?:ing)?\b[^>]*>|</?reasoning\b[^>]*>|"
+    r"<\|channel>|<channel\|>|<\|turn>|<\|start_of_role\|>|<\|end_of_role\|>|<\|end_of_text\|>|</?think(?:ing)?\b[^>]*>|</?reasoning\b[^>]*>|"
     r"</?answer\s*>|<\|im_(?:start|end)\|>|<\|(?:user|assistant|system|observation)\|>|"
     r"<\|start_header_id\|>|<\|end_header_id\|>|<\|begin_of_text\|>|\[gMASK\]|<sop>",
     re.IGNORECASE,
 )
 # End-of-reply tokens, removed only at the end so a code example keeping "</s>" is safe.
 _TRAILING_END = re.compile(
-    r"(?:\s*(?:</s>|<\|endoftext\|>|<\|eot_id\|>|<\|im_end\|>|<end_of_turn>|</turn>|</?turn\|>|<\|end\|>))+\s*$",
+    r"(?:\s*(?:</s>|<\|endoftext\|>|<\|eot_id\|>|<\|im_end\|>|<end_of_turn>|</turn>|</?turn\|>|<\|end_of_text\|>|<\|end\|>))+\s*$",
     re.IGNORECASE,
 )
 

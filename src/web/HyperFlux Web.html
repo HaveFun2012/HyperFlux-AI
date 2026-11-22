@@ -1973,6 +1973,39 @@ function usesGemmaThinking(thinkingExempt) {
   return !thinkingExempt && modelFamily() === 'gemma4';
 }
 
+// Each model family reads its own chat markers. HyperFlux was written for Gemma 4, but a
+// Qwen that is shown "<|turn>" copies it (it even ended a reply early when it wrote one at the
+// start of some HTML), so Qwen gets ChatML and Granite its role tokens. Other models keep the
+// Gemma layout, with stop words that only match a real new turn.
+var CHAT_FORMATS = {
+  gemma: {
+    open: function(role) { return '<|turn>' + role + '\n'; }, close: '<turn|>\n',
+    stops: ['<turn|>', '<|turn>', '</turn>']
+  },
+  gemmaLike: {
+    open: function(role) { return '<|turn>' + role + '\n'; }, close: '<turn|>\n',
+    stops: ['<turn|>', '</turn>', '<|turn>user', '<|turn>model', '<|turn>system']
+  },
+  chatml: {
+    open: function(role) { return '<|im_start|>' + (role === 'model' ? 'assistant' : role) + '\n'; }, close: '<|im_end|>\n',
+    stops: ['<|im_end|>', '<|im_start|>']
+  },
+  granite: {
+    open: function(role) { return '<|start_of_role|>' + (role === 'model' ? 'assistant' : role) + '<|end_of_role|>'; },
+    close: '<|end_of_text|>\n', stops: ['<|end_of_text|>', '<|start_of_role|>']
+  }
+};
+
+function chatFormat() {
+  var family = modelFamily();
+  if (family === 'gemma4') return CHAT_FORMATS.gemma;
+  if (family === 'qwen') return CHAT_FORMATS.chatml;
+  var active = (localModels.models || []).find(function(model) { return model.active; });
+  var names = (active ? active.name + ' ' + active.file : '') + ' ' + serverModelName;
+  if (/granite/i.test(names)) return CHAT_FORMATS.granite;
+  return CHAT_FORMATS.gemmaLike;
+}
+
 // Qwen and GLM stop thinking when the message ends with their own switch.
 function noThinkToken() {
   var family = modelFamily();
@@ -2334,14 +2367,15 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
   // Gemma 4 format. <|think|> at the top of the system turn turns on native
   // thinking; the model then writes <|channel>thought ... <channel|> before the answer.
   var nativeThinking = usesGemmaThinking(thinkingExempt);
+  var format = chatFormat();
   var systemTurn =
-    '<|turn>system\n' + (nativeThinking ? '<|think|>\n' : '') + systemInstruction + '<turn|>\n';
+    format.open('system') + (nativeThinking ? '<|think|>\n' : '') + systemInstruction + format.close;
   // Gemma 4 treats <|think|> as permission, not an order, and sometimes skips
   // thinking even on Horizon. Opening the thought channel for it makes it think.
   var currentTurn =
-    '<|turn>user\n' + (currentPicture ? IMAGE_PLACEHOLDER : '') + prompt + formatAttachmentContext(attachment, true) +
+    format.open('user') + (currentPicture ? IMAGE_PLACEHOLDER : '') + prompt + formatAttachmentContext(attachment, true) +
     (thinkingExempt ? noThinkToken() : '') +
-    '<turn|>\n<|turn>model\n' + (nativeThinking ? THINK_PREFILL : '');
+    format.close + format.open('model') + (nativeThinking ? THINK_PREFILL : '');
   // KoboldCpp keeps maxLength tokens free for the reply, so the prompt gets the rest.
   var promptTokens = Math.max(512, effectiveContextLength() - modelReplyBudget(modelId));
   var historyBudget = Math.max(0, promptTokens * 3 - systemTurn.length - currentTurn.length);
@@ -2354,10 +2388,10 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
     var role = message.role === 'user' ? 'user' : 'model';
     var showPicture = i === historyPicture;
     var formatted =
-      '<|turn>' + role + '\n' + (showPicture ? IMAGE_PLACEHOLDER : '') +
+      format.open(role) + (showPicture ? IMAGE_PLACEHOLDER : '') +
       String(message.content || '').replace(TRAILING_END, '') +
       formatAttachmentContext(message.attachment, showPicture) +
-      '<turn|>\n';
+      format.close;
     if (usedChars + formatted.length > historyBudget) break;
     history.push(formatted);
     usedChars += formatted.length;
@@ -2926,14 +2960,14 @@ var THOUGHT_BLOCKS = [
   /<\|?reflection\|?>([\s\S]*?)(<\/\|?reflection\|?>|$)/i
 ];
 // Tags that wrap the reply itself, or chat tokens that leak into it.
-var STRAY_TAGS = /<\|channel>|<channel\|>|<turn\|>|<\/?think(?:ing)?\b[^>]*>|<\/?reasoning\b[^>]*>|<\/?answer\s*>|<\|im_(?:start|end)\|>|<\|(?:user|assistant|system|observation)\|>|<\|start_header_id\|>|<\|end_header_id\|>|<\|begin_of_text\|>|\[gMASK\]|<sop>/gi;
+var STRAY_TAGS = /<\|channel>|<channel\|>|<\|turn>|<turn\|>|<\|start_of_role\|>|<\|end_of_role\|>|<\|end_of_text\|>|<\/?think(?:ing)?\b[^>]*>|<\/?reasoning\b[^>]*>|<\/?answer\s*>|<\|im_(?:start|end)\|>|<\|(?:user|assistant|system|observation)\|>|<\|start_header_id\|>|<\|end_header_id\|>|<\|begin_of_text\|>|\[gMASK\]|<sop>/gi;
 // End-of-reply tokens, removed only at the end so a code example keeping "</s>" is safe.
-var TRAILING_END = /(?:\s*(?:<\/s>|<\|endoftext\|>|<\|eot_id\|>|<\|im_end\|>|<end_of_turn>|<\/turn>|<\/?turn\|>|<\|end\|>))+\s*$/i;
+var TRAILING_END = /(?:\s*(?:<\/s>|<\|endoftext\|>|<\|eot_id\|>|<\|im_end\|>|<end_of_turn>|<\/turn>|<\/?turn\|>|<\|end_of_text\|>|<\|end\|>))+\s*$/i;
 
 // Mid-stream (or after Stop) the text can end with half a marker, like "<|chan".
 var STREAM_MARKERS = ['<|channel>', '<channel|>', '<|turn>', '<turn|>', '<think>', '</think>',
   '<reasoning>', '</reasoning>', '<answer>', '</answer>', '<|im_end|>', '<|im_start|>', '<|endoftext|>',
-  '<|eot_id|>', '<end_of_turn>', '</turn>'];
+  '<|eot_id|>', '<end_of_turn>', '</turn>', '<|end_of_text|>', '<|start_of_role|>', '<|end_of_role|>'];
 function trimPartialMarker(text) {
   for (var i = 0; i < STREAM_MARKERS.length; i++) {
     for (var k = STREAM_MARKERS[i].length - 1; k >= 2; k--) {
@@ -3289,7 +3323,7 @@ async function nameChat(sess, modelId) {
     var prompt = buildSessionPrompt(history, TITLE_REQUEST, null, true, modelId);
     var payload = {
       prompt: prompt, max_context_length: effectiveContextLength(), max_length: 20, temperature: 0.3,
-      top_p: 0.9, rep_penalty: 1.05, stop_sequence: ['<turn|>', '<|turn>', '</turn>', '\n'],
+      top_p: 0.9, rep_penalty: 1.05, stop_sequence: chatFormat().stops.concat(['\n']),
       genkey: 'HFXT' + Date.now().toString(36)
     };
     if (promptImage) payload.images = [promptImage.image.split(',')[1]];
@@ -4580,7 +4614,7 @@ var HF = (function(){
           // what the pages already repeat is the usual failure.
           rep_pen: (research && thinkingExempt) ? 1.12 : 1.05,
           rep_pen_range: 512,
-          stop_sequence: ['<turn|>', '<|turn>', '</turn>']
+          stop_sequence: chatFormat().stops
         };
         if (hasPicture(attachment) && !visionReady && !attachment.imageNotes) {
           throw new Error('Image input is off. Turn it on in Settings > Voice & pictures.');

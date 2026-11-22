@@ -389,6 +389,8 @@ class HyperFluxCoreTests(unittest.TestCase):
                          ("why", "The answer is 42."))
         self.assertEqual(reply("The answer is 42.<|im_end|>")[1], "The answer is 42.")
         self.assertEqual(reply("The answer is 42.</s>")[1], "The answer is 42.")
+        self.assertEqual(reply("<|turn>The answer is 42.")[1], "The answer is 42.")
+        self.assertEqual(reply("The answer is 42.<|end_of_text|>")[1], "The answer is 42.")
         self.assertEqual(reply("The answer is 42.</turn>")[1], "The answer is 42.")
         self.assertEqual(clean_response("GLM: The answer is 42."), "The answer is 42.")
         # A code example that mentions the same tags must survive untouched.
