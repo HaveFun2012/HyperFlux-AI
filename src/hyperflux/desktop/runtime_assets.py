@@ -30,11 +30,12 @@ _GEMMA_LICENSE = {
 }
 
 
-def _pinned_gemma(size_name, commit, size, sha256, **details):
-    repo = f"lmstudio-community/gemma-4-{size_name}-it-GGUF"
-    filename = f"gemma-4-{size_name}-it-Q4_K_M.gguf"
+def _pinned_gemma(size_name, commit, size, sha256, repo=None, filename=None, label=None, **details):
+    repo = repo or f"lmstudio-community/gemma-4-{size_name}-it-GGUF"
+    filename = filename or f"gemma-4-{size_name}-it-Q4_K_M.gguf"
     return {
-        "label": f"Gemma 4 {size_name} (Q4_K_M)",
+        "label": label or f"Gemma 4 {size_name} (Q4_K_M)",
+        "display_name": f"Gemma 4 {size_name}",
         "filename": filename,
         "url": f"https://huggingface.co/{repo}/resolve/{commit}/{filename}",
         "size": size,
@@ -53,15 +54,23 @@ GEMMA_MODELS = {
         summary="Recommended. Fast, and runs well on 8 GB of RAM.",
         min_ram_gb=8,
     ),
-    # Better at trick questions and real-world reasoning, but slower and heavier.
+    # Better at trick questions and real-world reasoning, but slower and heavier. This is
+    # Unsloth's "dynamic" quantisation (the sensitive layers keep more precision); HyperFlux
+    # answers with temperature 0.5 when it runs it. (Checked against Hugging Face on 2026-11-23.)
     "e4b": _pinned_gemma(
-        "E4B", "99210a71094c6aa8559f764e0cadedd7d89de94d", 5_335_291_936,
-        "0ffb122c8b6921f13cbc34186e052524d0b5803b17f4867b7197a561400b3770",
-        summary="Optional. Better reasoning, but slower; best with 16 GB of RAM.",
+        "E4B", "bfc15c382204943c3a8fff0c750b94ae2364d7a3", 5_126_306_944,
+        "3cf61de12daa015ee0f7b68e7b7c541405bf220e1e942bad8b47cab827d7df80",
+        repo="unsloth/gemma-4-E4B-it-GGUF", filename="gemma-4-E4B-it-UD-Q4_K_XL.gguf",
+        label="Gemma 4 E4B (Unsloth Q4_K_XL)",
+        summary="Optional. Best quality here, but slower; best with 16 GB of RAM.",
         min_ram_gb=16,
+        temperature=0.5,
     ),
 }
 DEFAULT_GEMMA = "e2b"
+# The E4B file earlier versions downloaded (lmstudio Q4_K_M): still recognised, no longer offered.
+LEGACY_GEMMA = {"gemma-4-e4b-it-q4_k_m.gguf": "e4b"}
+LEGACY_GEMMA_SIZES = {5_335_291_936: "e4b"}
 GEMMA_MODEL = GEMMA_MODELS[DEFAULT_GEMMA]
 
 
@@ -102,6 +111,8 @@ def model_family(model_path):
     for key, info in GEMMA_MODELS.items():
         if path.name.casefold() == info["filename"].casefold():
             return key
+    if path.name.casefold() in LEGACY_GEMMA:
+        return LEGACY_GEMMA[path.name.casefold()]
     try:
         size = path.stat().st_size
     except OSError:
@@ -109,6 +120,8 @@ def model_family(model_path):
     for key, info in GEMMA_MODELS.items():
         if size == info["size"]:
             return key
+    if size in LEGACY_GEMMA_SIZES:
+        return LEGACY_GEMMA_SIZES[size]
     name = (gguf_model_name(path) or "") + " " + path.stem
     for key in GEMMA_MODELS:
         if re.search(rf"(?<![a-z0-9]){key}(?![a-z0-9])", name, re.IGNORECASE):
@@ -305,12 +318,29 @@ def gguf_model_name(path):
     return name or None
 
 
+def recommended_temperature(model_path):
+    """The temperature HyperFlux uses with a model it was tuned for (the pinned Unsloth dynamic
+    E4B), or None. Found by file name, or by exact size when the file was renamed."""
+    path = Path(model_path)
+    for info in GEMMA_MODELS.values():
+        if "temperature" not in info:
+            continue
+        try:
+            if path.name.casefold() == info["filename"].casefold() or path.stat().st_size == info["size"]:
+                return info["temperature"]
+        except OSError:
+            continue
+    return None
+
+
 def describe_local_models(active_path):
     """The GGUF models this PC has, for the model picker: the active one first-class,
     friendly names for the downloadable Gemma files, file names for the rest."""
     # Recognised by file name, or by exact size when renamed (e.g. model.gguf).
-    known = {info["filename"].casefold(): info["label"].replace(" (Q4_K_M)", "") for info in GEMMA_MODELS.values()}
-    known_sizes = {info["size"]: info["label"].replace(" (Q4_K_M)", "") for info in GEMMA_MODELS.values()}
+    known = {info["filename"].casefold(): info["display_name"] for info in GEMMA_MODELS.values()}
+    known_sizes = {info["size"]: info["display_name"] for info in GEMMA_MODELS.values()}
+    known.update({name: GEMMA_MODELS[key]["display_name"] for name, key in LEGACY_GEMMA.items()})
+    known_sizes.update({size: GEMMA_MODELS[key]["display_name"] for size, key in LEGACY_GEMMA_SIZES.items()})
     paths = {}
     for path in [Path(active_path)] if active_path else []:
         if path.is_file():
@@ -329,14 +359,18 @@ def describe_local_models(active_path):
             size = path.stat().st_size
         except OSError:
             continue
-        models.append({
+        entry = {
             "path": str(path),
             "name": (known.get(path.name.casefold()) or known_sizes.get(size)
                      or gguf_model_name(path) or path.stem),
             "file": path.name,
             "size_gb": round(size / 1e9, 1),
             "active": key == active_key,
-        })
+        }
+        temperature = recommended_temperature(path)
+        if temperature is not None:
+            entry["temperature"] = temperature  # HyperFlux's own setting for this exact model
+        models.append(entry)
     models.sort(key=lambda model: (not model["active"], model["name"].casefold()))
     return models
 

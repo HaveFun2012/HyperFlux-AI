@@ -840,6 +840,7 @@ body.style-modern .send-btn,body.style-modern .go-btn{background:var(--ac);color
           <input id="temperatureSetting" type="range" min="0" max="2" step="0.05" oninput="updateTemperatureLabel()">
           <div class="range-ends"><span>Focused</span><span>Creative</span></div>
           <span class="setting-hint">0.7 suits most chats. Lower gives steadier, more predictable answers; higher gives more varied ones.</span>
+          <span class="setting-hint" id="temperatureNote" hidden></span>
         </div>
         <h4>Length and memory</h4>
         <div class="setting-row">
@@ -1797,8 +1798,23 @@ function updateGreeting() {
 }
 
 
+var DEFAULT_TEMPERATURE = 0.7;
+
+// Some models HyperFlux was tuned for (the recommended Unsloth dynamic Gemma 4 E4B) have their own
+// temperature; the model list reports it. It applies until the user picks a temperature themselves,
+// so a changed slider always wins. A model without one just uses the user's setting.
+function presetTemperature() {
+  var active = (localModels.models || []).find(function(model) { return model.active; });
+  return active && typeof active.temperature === 'number' ? active.temperature : null;
+}
+
+function activeTemperature() {
+  var preset = presetTemperature();
+  return preset !== null && Math.abs(modelSettings.temperature - DEFAULT_TEMPERATURE) < 0.001 ? preset : modelSettings.temperature;
+}
+
 function loadModelSettings() {
-  var defaults = {temperature: 0.7, maxLength: 4096, contextLength: 16384, version: MODEL_SETTINGS_VERSION};
+  var defaults = {temperature: DEFAULT_TEMPERATURE, maxLength: 4096, contextLength: 16384, version: MODEL_SETTINGS_VERSION};
   try {
     var saved = JSON.parse(localStorage.getItem('hfx_model_settings') || '{}');
     // Settings saved before thinking mode used 2048-token limits; move them up once.
@@ -2158,10 +2174,17 @@ document.addEventListener('keydown', function(event) {
 
 function refreshSettingsForm() {
   if (!$('temperatureSetting')) return;
-  $('temperatureSetting').value = modelSettings.temperature;
+  $('temperatureSetting').value = activeTemperature();
   $('lengthSetting').value = modelSettings.maxLength;
   $('contextSetting').value = modelSettings.contextLength;
   updateTemperatureLabel();
+  var tempNote = $('temperatureNote');
+  if (tempNote) {
+    var preset = presetTemperature();
+    tempNote.hidden = preset === null;
+    tempNote.textContent = preset === null ? '' : 'HyperFlux uses ' + preset.toFixed(2) +
+      ' with the model you have loaded, because it suits that model best. Move the slider to use your own.';
+  }
   $('contextHint').textContent = 'How much of the chat HyperFlux can see at once. More remembers further back but is slower.' +
     (serverMaxContext ? ' Your server allows up to ' + serverMaxContext.toLocaleString() + '.' : '');
 }
@@ -3226,7 +3249,7 @@ function executeLocalCommand(command) {
 
   var tempMatch = command.match(/^\/temp(?:\s+(.+))?$/i);
   if (tempMatch) {
-    if (!tempMatch[1]) return 'Current temperature: ' + Number(modelSettings.temperature).toFixed(2) + '. Usage: /temp <0-2>';
+    if (!tempMatch[1]) return 'Current temperature: ' + Number(activeTemperature()).toFixed(2) + (presetTemperature() !== null && activeTemperature() !== modelSettings.temperature ? ' (recommended for this model)' : '') + '. Usage: /temp <0-2>';
     var temperature = Number(tempMatch[1]);
     if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
       return 'Temperature must be a number between 0 and 2.';
@@ -3266,7 +3289,7 @@ function executeLocalCommand(command) {
       '- **Server:** ' + (serverConnected ? 'Connected on localhost:5001' : 'Not connected'),
       '- **Context usage:** ' + context,
       '- **Last generation speed:** ' + speed,
-      '- **Temperature:** ' + Number(modelSettings.temperature).toFixed(2),
+      '- **Temperature:** ' + Number(activeTemperature()).toFixed(2),
       '- **Maximum output:** ' + modelSettings.maxLength + ' tokens',
       '- **Session memory:** ' + exchanges + ' user messages',
       '',
@@ -4273,7 +4296,7 @@ var HF = (function(){
       }
     },
     resetModelSettings: function(){
-      $('temperatureSetting').value = 0.7;
+      $('temperatureSetting').value = presetTemperature() !== null ? presetTemperature() : DEFAULT_TEMPERATURE;
       $('lengthSetting').value = 4096;
       $('contextSetting').value = Math.min(16384, serverMaxContext || 16384);
       updateTemperatureLabel();
@@ -4291,6 +4314,8 @@ var HF = (function(){
     // Saves every tab at once. Problems are shown next to the buttons, on the right tab.
     saveAllSettings: function(){
       var temperature = Number($('temperatureSetting').value);
+      if (presetTemperature() !== null && Math.abs(temperature - presetTemperature()) < 0.001 &&
+          Math.abs(modelSettings.temperature - DEFAULT_TEMPERATURE) < 0.001) temperature = DEFAULT_TEMPERATURE;
       var maxLength = $('lengthSetting').valueAsNumber;
       var contextLength = $('contextSetting').valueAsNumber;
       var problem = '';
@@ -4606,7 +4631,7 @@ var HF = (function(){
           prompt: sessionPrompt,
           max_context_length: effectiveContextLength(),
           max_length: modelReplyBudget(requestModel),
-          temperature: modelSettings.temperature,
+          temperature: activeTemperature(),
           top_p: 0.95,
           // KoboldCpp reads "rep_pen" (it ignores "rep_penalty", which is what this used to send, so no
           // penalty was ever applied). Mild by default because a high one punishes reasoning, which

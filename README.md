@@ -33,7 +33,7 @@ Riddles and real-world "what happens if" questions think automatically even with
 - **Look and layout:** a **Modern** (flat, calm) or **Legacy** (glass and particles) interface style; chats grouped by Today / Yesterday / Previous 7 days / Older with the open one highlighted; a hideable sidebar and **Ctrl+K** for chat search; a quiet home page with four quick starts; answers in one centred reading column; theme-coloured scrollbars. New chats name themselves from their first answer.
 - **Other models:** HyperFlux is written for Gemma 4, but any GGUF the model picker lists will run. Thinking adapts to the loaded model: Gemma 4 keeps its built-in thinking; other models are asked to think (or not to) in plain words, and Qwen and GLM also get their own `/no_think` switch. Thinking tags and leaked chat tokens from Qwen, GLM, DeepSeek R1, Llama and others are cleaned up, and the picker says when the loaded model isn't Gemma 4. A model is only treated as non-Gemma when its name clearly says so, so a renamed Gemma file (like `model-e4b.gguf`) keeps working as before.
 - **Fewer repeats in search answers:** repeated facts are removed from the web pages before the model reads them, the model is told to say each fact once, and repeated sentences and closing recaps are merged out of the answer with every citation kept.
-- **Model picker:** switch between the GGUF models on this PC without restarting.
+- **Model picker:** switch between the GGUF models on this PC without restarting. The recommended Unsloth dynamic Gemma 4 E4B is recognised and runs at temperature 0.5 (Settings shows it, and moving the slider overrides it).
 - **Updates:** the installed app checks GitHub at startup and every 6 hours. When a new release is out, a popup shows its patch notes and the files that changed since your version, and asks before installing. **Later** keeps an **Update available** card in the sidebar, even after a restart, until you update or skip that version. Every installer is checked against its SHA-256 before it runs.
 
 **In the terminal app** (`src\scripts\Run_HyperFlux_Terminal.bat`): the same models and answer style, plus `/model`, `/think`, `/thinking`, `/persona`, `/instructions <text>|clear` and `/export`. The persona and custom instructions are remembered between sessions. Pictures, read aloud and chat search are desktop-only.
@@ -127,10 +127,12 @@ setup wizard looks for common local asset locations and lets you browse for an
 existing GGUF/KoboldCpp executable; otherwise it offers the official KoboldCpp
 release. If no model is found, it offers to download one after showing its
 licence: the recommended Gemma 4 E2B Q4_K_M (3.4 GB, fast, fine on 8 GB of RAM)
-is pre-selected, and Gemma 4 E4B Q4_K_M (5.3 GB, better reasoning but slower,
-best with 16 GB) is an optional choice. Setup shows the PC's RAM as a hint but
+is pre-selected, and Gemma 4 E4B in Unsloth's dynamic Q4_K_XL quantisation (5.1 GB,
+the best quality here but slower, best with 16 GB) is an optional choice. When HyperFlux
+runs that exact file it answers with temperature 0.5 instead of 0.7, unless you have
+picked your own temperature. Setup shows the PC's RAM as a hint but
 never chooses for the user. Each file is pinned to one Hugging Face commit
-(`lmstudio-community/gemma-4-E2B-it-GGUF` / `gemma-4-E4B-it-GGUF`) and checked
+(`lmstudio-community/gemma-4-E2B-it-GGUF` / `unsloth/gemma-4-E4B-it-GGUF`) and checked
 against a fixed SHA-256, and it is saved to `%LOCALAPPDATA%\HyperFlux\models`.
 To switch models later, close HyperFlux and use the **Change HyperFlux model**
 Start menu shortcut (`HyperFlux.exe --setup`). Existing model files are never replaced or
