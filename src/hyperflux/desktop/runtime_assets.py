@@ -111,7 +111,7 @@ def model_family(model_path):
     for key, info in GEMMA_MODELS.items():
         if path.name.casefold() == info["filename"].casefold():
             return key
-    if path.name.casefold() in LEGACY_GEMMA:
+    if LEGACY_GEMMA.get(path.name.casefold()) in GEMMA_MODELS:
         return LEGACY_GEMMA[path.name.casefold()]
     try:
         size = path.stat().st_size
@@ -120,7 +120,7 @@ def model_family(model_path):
     for key, info in GEMMA_MODELS.items():
         if size == info["size"]:
             return key
-    if size in LEGACY_GEMMA_SIZES:
+    if LEGACY_GEMMA_SIZES.get(size) in GEMMA_MODELS:
         return LEGACY_GEMMA_SIZES[size]
     name = (gguf_model_name(path) or "") + " " + path.stem
     for key in GEMMA_MODELS:
@@ -337,10 +337,15 @@ def describe_local_models(active_path):
     """The GGUF models this PC has, for the model picker: the active one first-class,
     friendly names for the downloadable Gemma files, file names for the rest."""
     # Recognised by file name, or by exact size when renamed (e.g. model.gguf).
-    known = {info["filename"].casefold(): info["display_name"] for info in GEMMA_MODELS.values()}
-    known_sizes = {info["size"]: info["display_name"] for info in GEMMA_MODELS.values()}
-    known.update({name: GEMMA_MODELS[key]["display_name"] for name, key in LEGACY_GEMMA.items()})
-    known_sizes.update({size: GEMMA_MODELS[key]["display_name"] for size, key in LEGACY_GEMMA_SIZES.items()})
+    def display(info):
+        return info.get("display_name") or info["label"].replace(" (Q4_K_M)", "")
+
+    known = {info["filename"].casefold(): display(info) for info in GEMMA_MODELS.values()}
+    known_sizes = {info["size"]: display(info) for info in GEMMA_MODELS.values()}
+    # Files earlier versions downloaded: still named properly (only when that model is still listed).
+    known.update({name: display(GEMMA_MODELS[key]) for name, key in LEGACY_GEMMA.items() if key in GEMMA_MODELS})
+    known_sizes.update({size: display(GEMMA_MODELS[key]) for size, key in LEGACY_GEMMA_SIZES.items()
+                        if key in GEMMA_MODELS})
     paths = {}
     for path in [Path(active_path)] if active_path else []:
         if path.is_file():
