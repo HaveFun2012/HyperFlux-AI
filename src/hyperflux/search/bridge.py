@@ -5,9 +5,11 @@ Run on its own with:  python -m hyperflux.search.bridge
 
 import hmac
 import json
+import os
 import re
 import secrets
 import subprocess
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -15,7 +17,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import requests
 
-from hyperflux.desktop import ocr
+from hyperflux.desktop import ocr, video
 from hyperflux.paths import BRIDGE_TOKEN_PATH, KOBOLD_LOG_PATH
 from hyperflux.search import research
 
@@ -187,7 +189,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         if route not in ("/search", "/research/plan", "/research/sources", "/research/tidy",
                          "/local-models/switch", "/vision/install", "/update/install", "/update/skip",
                          "/update/prompted", "/image-helper/enable", "/image-helper/disable",
-                         "/image-helper/wake", "/image-helper/used", "/image/read"):
+                         "/image-helper/wake", "/image-helper/used", "/image/read", "/video/frames"):
             self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
@@ -213,6 +215,9 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             return
         if route.startswith("/research/"):
             self._research(route)
+            return
+        if route == "/video/frames":
+            self._video_frames()
             return
         if route == "/image/read":
             self._read_image_text()
@@ -269,6 +274,59 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": results.removeprefix("SEARCH ERROR:").strip()})
             return
         self._send_json(200, {"query": optimized_query, "results": results})
+
+    def _video_frames(self):
+        """/video/frames?name=clip.mp4 with the video file as the body -> {duration, frames:
+        [{time, image}]}: still frames taken by Windows' own decoder, for a model to look at."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        name = (parse_qs(urlsplit(self.path).query).get("name") or [""])[0]
+        problem = None
+        if not self._log_token_is_valid():
+            problem = (403, "Reading videos is only available in the HyperFlux desktop app.")
+        elif not video.is_video_name(name):
+            problem = (415, "That isn't a video format HyperFlux can read.")
+        elif not 1 <= length <= video.MAX_VIDEO_BYTES:
+            problem = (413, f"The video must be smaller than {video.MAX_VIDEO_BYTES // (1024 * 1024)} MB.")
+        if problem:
+            self._drain(length)
+            self._send_json(problem[0], {"error": problem[1]})
+            return
+        # Only the extension comes from the request; the file's name is ours.
+        handle, temporary = tempfile.mkstemp(suffix=Path(name).suffix.lower(), prefix="hyperflux-video-")
+        try:
+            with os.fdopen(handle, "wb") as target:
+                remaining = length
+                while remaining:  # copied in pieces so a large video is never held in memory
+                    piece = self.rfile.read(min(remaining, 1024 * 1024))
+                    if not piece:
+                        raise ValueError("The video did not arrive completely.")
+                    target.write(piece)
+                    remaining -= len(piece)
+            result = video.extract_frames(temporary)
+        except ValueError as error:
+            self._send_json(400, {"error": str(error)})
+            return
+        except (OSError, subprocess.SubprocessError) as error:
+            self._send_json(502, {"error": " ".join(str(error).split())})
+            return
+        finally:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+        self._send_json(200, result)
+
+    def _drain(self, length):
+        """Read and throw away a refused upload, so the client gets the reason instead of a reset."""
+        remaining = min(max(length, 0), video.MAX_VIDEO_BYTES)
+        while remaining:
+            piece = self.rfile.read(min(remaining, 1024 * 1024))
+            if not piece:
+                return
+            remaining -= len(piece)
 
     def _read_image_text(self):
         """/image/read {image: data URL} -> {text}: the text in a picture, read by Windows' own OCR."""
