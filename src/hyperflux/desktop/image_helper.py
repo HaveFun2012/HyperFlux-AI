@@ -10,8 +10,12 @@ started and stopped on the window's thread through the signals.
 """
 
 import json
+import os
+import re
+import subprocess
 import threading
 import time
+from pathlib import Path
 
 import requests
 from PySide6.QtCore import QObject, Signal
@@ -23,6 +27,7 @@ IDLE_SECONDS = 10 * 60
 NEEDED_GB = 4.5      # the E2B model + its vision file + working memory
 MIN_TOTAL_GB = 7      # an "8 GB" PC reports about 7.9 GB (some is reserved by the hardware)
 SETTINGS_FILE = assets.APP_DATA / "image_helper.json"
+RUNNERS = ("cpu", "igpu")  # the processor, or the graphics built into it
 
 
 def memory_gb():
@@ -58,10 +63,13 @@ def hardware_verdict(total_gb, available_gb, needed_gb=NEEDED_GB):
     return {"ok": True, "note": "This PC has enough memory. The helper runs on the CPU and only while it is used."}
 
 
-def find_helper_model():
+def find_helper_model(extra_folder=None):
     """The Gemma 4 E2B model file on this PC (downloaded by HyperFlux or kept by the user), else None."""
     pinned = assets.model_download_path("e2b")
-    candidates = [pinned] + list(assets.find_gguf_models())
+    # extra_folder: where the main model is. The general search only covers the usual folders and
+    # whichever one HyperFlux was started from, so a helper kept beside the model could be missed.
+    beside = sorted(extra_folder.glob("*.gguf")) if extra_folder and extra_folder.is_dir() else []
+    candidates = [pinned] + [p for p in beside if not assets.is_vision_file(p)] + list(assets.find_gguf_models())
     for path in candidates:
         try:
             if path.is_file() and assets.model_family(path) == "e2b" and assets.is_gguf(path):
@@ -71,12 +79,33 @@ def find_helper_model():
     return None
 
 
+def parse_integrated_gpu(summary):
+    """(Vulkan device number, name) of the integrated GPU in `vulkaninfo --summary`, else None."""
+    for block in re.split(r"^GPU(?=\d+:)", summary, flags=re.MULTILINE)[1:]:
+        number = re.match(r"(\d+):", block)
+        name = re.search(r"deviceName\s*=\s*(.+)", block)
+        if number and name and "PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU" in block:
+            return int(number.group(1)), name.group(1).strip()
+    return None
+
+
+def find_integrated_gpu():
+    tool = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "vulkaninfo.exe")
+    try:
+        output = subprocess.run([tool, "--summary"], capture_output=True, text=True, timeout=20,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    return parse_integrated_gpu(output)
+
+
 def load_settings():
     try:
         data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-        return {"enabled": bool(data.get("enabled"))}
+        runner = data.get("runner")
+        return {"enabled": bool(data.get("enabled")), "runner": runner if runner in RUNNERS else "cpu"}
     except (OSError, ValueError, AttributeError):
-        return {"enabled": False}
+        return {"enabled": False, "runner": "cpu"}
 
 
 def save_settings(settings):
@@ -88,16 +117,55 @@ class ImageHelper(QObject):
     start_requested = Signal()
     stop_requested = Signal()
 
-    def __init__(self, main_model_is_vision, parent=None, port=HELPER_PORT):
+    def __init__(self, main_model_is_vision, parent=None, port=HELPER_PORT, main_model=lambda: None):
         super().__init__(parent)
+        self._main_model = main_model  # callable: the main model's path, to look beside it
         self._main_model_is_vision = main_model_is_vision  # callable: the main model can see pictures itself
         self.port = port
         self._lock = threading.Lock()
-        self._enabled = load_settings()["enabled"]
+        settings = load_settings()
+        self._enabled = settings["enabled"]
+        self._runner = settings["runner"]
+        self._integrated = None  # (device number, name), looked up once
+        self._looked_for_gpu = False
         self._running = False   # the process is up (set by the window)
         self._starting = False  # asked to start, not answering yet
         self._last_used = time.monotonic()
         self._state = {"downloading": False, "progress": 0, "message": "", "error": ""}
+
+    def find_model(self):
+        main = self._main_model()
+        return find_helper_model(Path(main).parent if main else None)
+
+    def integrated_gpu(self):
+        if not self._looked_for_gpu:
+            self._integrated, self._looked_for_gpu = find_integrated_gpu(), True
+        return self._integrated
+
+    def runner(self):
+        """'igpu' only while the PC really has an integrated GPU."""
+        return "igpu" if self._runner == "igpu" and self.integrated_gpu() else "cpu"
+
+    def set_runner(self, runner):
+        if runner not in RUNNERS or (runner == "igpu" and not self.integrated_gpu()):
+            return False, "This PC has no integrated graphics the helper can use."
+        with self._lock:
+            changed = runner != self._runner
+            self._runner = runner
+            self._state["error"] = ""
+        if changed:
+            self._remember()
+            self.stop_requested.emit()  # the next picture starts it on the new one
+        return True, "Saved."
+
+    def process_exited(self):
+        """The window saw the server stop by itself."""
+        with self._lock:
+            failed_to_load = self._starting
+        if failed_to_load:
+            advice = " Choose the processor (CPU) instead." if self.runner() == "igpu" else " See kobold-helper.log."
+            self.finish_with_error("The image helper stopped while loading." + advice)
+        self.set_running(False)
 
     # ----- status -----------------------------------------------------------------------
 
@@ -109,9 +177,8 @@ class ImageHelper(QObject):
 
     def describe(self):
         total, available = memory_gb()
-        model, vision = find_helper_model(), assets.VISION_FILES["e2b"]
-        vision_ready = (assets.vision_download_path("e2b").is_file()
-                        and assets.vision_download_path("e2b").stat().st_size == vision["size"]) if model else False
+        model, vision = self.find_model(), assets.VISION_FILES["e2b"]
+        vision_ready = self._vision_file(model) is not None
         with self._lock:
             enabled, running, starting, state = self._enabled, self._running, self._starting, dict(self._state)
         answering = running and self._answering()
@@ -135,6 +202,8 @@ class ImageHelper(QObject):
             "enabled": enabled,
             "status": status,
             "port": self.port,
+            "runner": self.runner(),
+            "integrated_gpu": (self.integrated_gpu() or (None, None))[1],
             "name": "Gemma 4 E2B",
             "needs_download": needs_files,
             "download_mb": size_mb,
@@ -160,7 +229,7 @@ class ImageHelper(QObject):
     def request_enable(self):
         """Turn the feature on. Downloads what is missing, then starts the server. -> (accepted, message)"""
         total, available = memory_gb()
-        verdict = hardware_verdict(total, available, self._needed_gb(find_helper_model()))
+        verdict = hardware_verdict(total, available, self._needed_gb(self.find_model()))
         if not verdict["ok"]:
             return False, verdict["note"]
         with self._lock:
@@ -169,12 +238,14 @@ class ImageHelper(QObject):
             self._enabled = True
             self._state = {"downloading": False, "progress": 0, "message": "", "error": ""}
         self._remember()
-        model = find_helper_model()
-        if model is None or not self._vision_ready():
+        model = self.find_model()
+        if model is None or self._vision_file(model) is None:
             with self._lock:
                 self._state = {"downloading": True, "progress": 0, "error": "", "message": "Starting the download..."}
             threading.Thread(target=self._download, name="HyperFluxHelperDownload", daemon=True).start()
             return True, "Downloading the image helper."
+        if self._main_model_is_vision():
+            return True, "On. The loaded model sees pictures itself, so the helper stays asleep."
         self.wake()
         return True, "Starting the image helper."
 
@@ -207,11 +278,18 @@ class ImageHelper(QObject):
 
     def start_arguments(self):
         """KoboldCpp arguments for the helper, or None when its files are missing."""
-        model = find_helper_model()
-        if model is None or not self._vision_ready():
+        model = self.find_model()
+        vision = self._vision_file(model)
+        if model is None or vision is None:
             return None
-        return ["--model", str(model), "--mmproj", str(assets.vision_download_path("e2b")),
-                "--port", str(self.port), "--skiplaunch", "--usecpu", "--contextsize", "4096"]
+        if self.runner() == "igpu":
+            # Only the picture reader goes to the integrated GPU: putting the whole model there
+            # failed to load on the PC this was tested on (Intel UHD 630).
+            device = ["--usevulkan", str(self.integrated_gpu()[0]), "--gpulayers", "0"]
+        else:
+            device = ["--usecpu"]
+        return ["--model", str(model), "--mmproj", str(vision),
+                "--port", str(self.port), "--skiplaunch", "--contextsize", "4096"] + device
 
     def set_running(self, running):
         with self._lock:
@@ -240,34 +318,30 @@ class ImageHelper(QObject):
 
     def _remember(self):
         try:
-            save_settings({"enabled": self._enabled})
+            save_settings({"enabled": self._enabled, "runner": self._runner})
         except OSError:
             pass  # the choice just won't survive a restart
 
-    def _vision_ready(self):
-        path = assets.vision_download_path("e2b")
-        try:
-            return path.is_file() and path.stat().st_size == assets.VISION_FILES["e2b"]["size"]
-        except OSError:
-            return False
-
-    def _set(self, **changes):
-        with self._lock:
-            self._state.update(changes)
+    @staticmethod
+    def _vision_file(model):
+        """The helper's vision file: HyperFlux's own download, or one kept next to the model
+        (the same two places the main model's image input looks)."""
+        return assets.vision_file_for(model) if model else None
 
     def _download(self):
         try:
-            if find_helper_model() is None:
+            if self.find_model() is None:
                 assets.download_gemma_model(
                     lambda percent: self._set(progress=round(percent * 0.78)),  # the model is ~78% of the bytes
                     lambda message: self._set(message=message), lambda: False, "e2b")
-            if not self._vision_ready():
+            if self._vision_file(self.find_model()) is None:
                 assets.download_vision_file(
-                    find_helper_model(),
+                    self.find_model(),
                     lambda percent: self._set(progress=78 + round(percent * 0.22)),
                     lambda message: self._set(message=message), lambda: False)
         except (OSError, ValueError) as error:
             self.finish_with_error(str(error))
             return
         self._set(downloading=False, progress=100, message="")
-        self.wake()
+        if not self._main_model_is_vision():
+            self.wake()

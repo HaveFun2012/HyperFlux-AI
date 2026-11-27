@@ -102,8 +102,25 @@ class BridgeImageTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
 
 
+VULKAN_SUMMARY = """Devices:
+========
+GPU0:
+\tdeviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+\tdeviceName         = NVIDIA GeForce GTX 1050
+GPU1:
+\tdeviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+\tdeviceName         = Intel(R) UHD Graphics 630
+"""
+
+
 @unittest.skipUnless(__import__("importlib").util.find_spec("PySide6"), "needs PySide6")
 class HelperHardwareTests(unittest.TestCase):
+    def test_integrated_gpu_is_found_by_its_vulkan_number(self):
+        from hyperflux.desktop.image_helper import parse_integrated_gpu
+        self.assertEqual(parse_integrated_gpu(VULKAN_SUMMARY), (1, "Intel(R) UHD Graphics 630"))
+        self.assertIsNone(parse_integrated_gpu(VULKAN_SUMMARY.split("GPU1:")[0]))
+        self.assertIsNone(parse_integrated_gpu(""))
+
     def test_hardware_verdict(self):
         from hyperflux.desktop.image_helper import hardware_verdict
         self.assertFalse(hardware_verdict(4, 2)["ok"])

@@ -60,6 +60,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
     log_token = ""
     model_manager = None  # desktop app only: lists and switches local models
     vision_manager = None  # desktop app only: downloads the image-input file
+    performance_manager = None  # desktop app only: speed settings
     image_helper = None  # desktop app only: the second, picture-reading server
     update_manager = None  # installed desktop app only: offers and installs updates
 
@@ -115,7 +116,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         if route == "/health":
             self._send_json(200, {"status": "ok", "service": "HyperFlux search"})
             return
-        if route not in ("/kobold-logs", "/local-models", "/vision", "/update", "/image-helper"):
+        if route not in ("/kobold-logs", "/local-models", "/vision", "/update", "/image-helper", "/performance"):
             self._send_json(404, {"error": "Not found."})
             return
         if not self._origin_is_allowed():
@@ -129,6 +130,12 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {"available": False})
             else:
                 self._send_json(200, self.update_manager.describe())
+            return
+        if route == "/performance":
+            if self.performance_manager is None:
+                self._send_json(200, {"unavailable": True})
+            else:
+                self._send_json(200, self.performance_manager.describe())
             return
         if route == "/image-helper":
             if self.image_helper is None:
@@ -189,7 +196,8 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         if route not in ("/search", "/research/plan", "/research/sources", "/research/tidy",
                          "/local-models/switch", "/vision/install", "/update/install", "/update/skip",
                          "/update/prompted", "/image-helper/enable", "/image-helper/disable",
-                         "/image-helper/wake", "/image-helper/used", "/image/read", "/video/frames"):
+                         "/image-helper/wake", "/image-helper/used",
+                         "/image-helper/runner-cpu", "/image-helper/runner-igpu", "/image/read", "/video/frames", "/performance"):
             self._discard_body()
             self._send_json(404, {"error": "Not found."})
             return
@@ -216,6 +224,9 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         if route.startswith("/research/"):
             self._research(route)
             return
+        if route == "/performance":
+            self._save_performance()
+            return
         if route == "/video/frames":
             self._video_frames()
             return
@@ -231,6 +242,10 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             if action == "used":
                 self.image_helper.touch()
                 self._send_json(200, {"ok": True})
+                return
+            if action.startswith("runner-"):
+                accepted, message = self.image_helper.set_runner(action.removeprefix("runner-"))
+                self._send_json(200 if accepted else 409, {"accepted": accepted, "message": message})
                 return
             if action == "wake":
                 self._send_json(200, {"accepted": self.image_helper.wake()})
@@ -274,6 +289,31 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": results.removeprefix("SEARCH ERROR:").strip()})
             return
         self._send_json(200, {"query": optimized_query, "results": results})
+
+    def _save_performance(self):
+        """/performance {pictures: auto|chat|pictures, context: int} -> {restarting, changed}"""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        if not 1 <= length <= 1024:
+            self._discard_body()
+            self._send_json(413, {"error": "Request must be between 1 and 1024 bytes."})
+            return
+        body = self.rfile.read(length)
+        if not self._log_token_is_valid() or self.performance_manager is None:
+            self._send_json(403, {"error": "Speed settings are only available in the HyperFlux desktop app."})
+            return
+        try:
+            data = json.loads(body.decode("utf-8"))
+            pictures, context = data["pictures"], data["context"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError):
+            self._send_json(400, {"error": "Send pictures and context."})
+            return
+        try:
+            self._send_json(200, self.performance_manager.update(pictures, context))
+        except OSError as error:
+            self._send_json(500, {"error": f"The settings could not be saved: {error}"})
 
     def _video_frames(self):
         """/video/frames?name=clip.mp4 with the video file as the body -> {duration, frames:
@@ -424,7 +464,8 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
 
 
 def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, log_token=None,
-                         model_manager=None, vision_manager=None, update_manager=None, image_helper=None):
+                         model_manager=None, vision_manager=None, update_manager=None, image_helper=None,
+                         performance_manager=None):
     handler = type(
         "HyperFluxSearchBridgeHandler",
         (_SearchBridgeHandler,),
@@ -435,6 +476,7 @@ def create_search_bridge(engine, host="127.0.0.1", port=5002, result_count=3, lo
             "model_manager": model_manager,
             "vision_manager": vision_manager,
             "image_helper": image_helper,
+            "performance_manager": performance_manager,
             "update_manager": update_manager,
         },
     )

@@ -501,7 +501,10 @@ body.sb-collapsed .sb{margin-left:calc(-1 * var(--sbw) - 12px);opacity:0;pointer
 .h-item.active{background:var(--acbg);border-color:var(--acbr);color:var(--t1)}
 .h-exp,.h-del{opacity:0;transition:opacity .15s}
 .h-item:hover .h-exp,.h-item:hover .h-del,.h-item:focus-within .h-exp,.h-item:focus-within .h-del,.h-item.active .h-exp,.h-item.active .h-del{opacity:1}
-.sb-foot{flex-direction:row;align-items:center;gap:8px;padding:10px 12px 12px}
+.sb-foot{flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px 12px}
+/* the update card gets its own row above Settings and Appearance, and stays small */
+.sb-foot .update-card{flex:0 0 100%;margin:0;padding:10px}
+.sb-foot .update-card-sub{margin:2px 0 8px}
 .sf-btn{flex:1;justify-content:flex-start}
 .sf-icon{flex:0 0 40px;width:40px;justify-content:center;padding:9px 0}
 /* Top bar */
@@ -855,6 +858,15 @@ body.style-modern .send-btn,body.style-modern .go-btn{background:var(--ac);color
           <input id="contextSetting" type="number" min="1024" max="16384" step="1">
           <span class="setting-hint" id="contextHint">How much of the chat HyperFlux can see at once. More remembers further back but is slower.</span>
         </div>
+        <div class="setting-row" id="speedRow" hidden>
+          <label for="picturesSetting">Pictures or chat speed</label>
+          <select id="picturesSetting">
+            <option value="auto">Automatic (recommended)</option>
+            <option value="chat">Faster chat, slower pictures</option>
+            <option value="pictures">Faster pictures, slower chat</option>
+          </select>
+          <span class="setting-hint" id="speedHint"></span>
+        </div>
         <button class="link-btn" type="button" onclick="HF.resetModelSettings()"><i class="fas fa-rotate-left" aria-hidden="true"></i> Reset to recommended</button>
       </div>
 
@@ -924,6 +936,14 @@ body.style-modern .send-btn,body.style-modern .go-btn{background:var(--ac);color
         <div class="setting-row">
           <span class="setting-hint" id="helperStatus">Checking...</span>
           <button class="vision-btn" id="helperButton" type="button" onclick="HF.toggleImageHelper()" hidden>Turn on image helper</button>
+        </div>
+        <div class="setting-row" id="helperRunnerRow" hidden>
+          <label for="helperRunnerSetting">Run the helper on</label>
+          <select id="helperRunnerSetting" onchange="HF.setHelperRunner(this.value)">
+            <option value="cpu">Processor (CPU), recommended</option>
+            <option value="igpu">Integrated graphics</option>
+          </select>
+          <span class="setting-hint" id="helperRunnerHint"></span>
         </div>
       </div>
 
@@ -2696,6 +2716,7 @@ function renderHistoryList() {
     delBtn.innerHTML = '<i class="fas fa-xmark"></i>';
     delBtn.onclick = function(e) {
       e.stopPropagation();
+      if (!window.confirm('Delete the chat "' + (s.title || 'Chat ' + (idx + 1)) + '"? This can\'t be undone.')) return;
       deleteSession(s.id);
     };
 
@@ -3720,6 +3741,55 @@ async function enableVision() {
   refreshVisionSetup();
 }
 
+// ---- Speed: how the desktop app starts the model server --------------------------------------
+var speedInfo = null;  // null until the desktop app has answered, so unknown settings are never overwritten
+
+async function refreshSpeedSettings() {
+  var row = $('speedRow');
+  if (!row || !bridgeToken()) return;
+  speedInfo = null;
+  try {
+    var response = await fetch(bridgeUrl('/performance'), {cache: 'no-store'});
+    if (response.ok) speedInfo = await response.json();
+  } catch (error) {}
+  if (!speedInfo || speedInfo.unavailable) { speedInfo = null; row.hidden = true; return; }
+  row.hidden = false;
+  $('picturesSetting').value = speedInfo.pictures;
+  $('speedHint').textContent = (speedInfo.has_vision
+    ? 'Right now the picture reader runs on the ' + (speedInfo.vision_on_cpu ? 'processor, which leaves the graphics card to the model.' : 'graphics card.') +
+      ' On a 4 GB card, keeping it off the card made chat faster and each picture about 5 seconds slower in our test.'
+    : 'This only matters for a model that sees pictures.') +
+    ' Changing this or Conversation memory reloads the model, which can take a minute.' +
+    (speedInfo.can_restart ? '' : ' HyperFlux didn\u2019t start this server, so restart it yourself to apply changes.');
+}
+
+async function applySpeedSettings(pictures, context) {
+  if (!speedInfo) return;
+  context = Math.max(4096, context);
+  if (pictures === speedInfo.pictures && context === speedInfo.context) return;
+  if (isGenerating) {
+    window.alert('HyperFlux is still answering, so the speed settings weren\u2019t changed. Save again when it has finished.');
+    return;
+  }
+  try {
+    var response = await fetch(bridgeUrl('/performance'), {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pictures: pictures, context: context})
+    });
+    var data = await response.json();
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    speedInfo.pictures = pictures;
+    speedInfo.context = context;
+    if (data.restarting) {
+      serverMaxContext = null;  // the reloaded server may allow a different amount
+      visionReady = false;
+      updateServerStatus(false);
+    }
+  } catch (error) {
+    window.alert('The speed settings could not be changed: ' + error.message);
+  }
+}
+
 // ---- Image helper (second server) + reading pictures for models that can't see ------------------
 // A model like Granite or Qwen can't see pictures. The desktop app can run a second, small server
 // (Gemma 4 E2B with its vision file, on the CPU) that looks at the picture, and Windows OCR reads
@@ -3771,6 +3841,8 @@ function renderHelperPill() {
     downloading: 'Downloading ' + (imageHelper.progress || 0) + '%',
     error: 'Problem \u00b7 see Settings'
   };
+  // A model that sees pictures itself never uses the helper, so say that instead of "wakes when needed".
+  if (visionReady && status === 'sleeping') words.sleeping = 'Not needed \u00b7 this model sees pictures';
   $('helperTxt').textContent = 'Image helper \u00b7 ' + (imageHelper.name || 'Gemma 4 E2B') + ' \u00b7 ' + (words[status] || status);
   var dot = $('helperDot');
   dot.className = 's-dot' + (status === 'ready' ? '' : status === 'starting' || status === 'downloading' ? ' checking'
@@ -3782,6 +3854,7 @@ function renderHelperSettings() {
   var button = $('helperButton');
   if (!status || !button) return;
   button.hidden = true;
+  renderHelperRunner();
   if (!bridgeToken() || imageHelper.unavailable) {
     status.textContent = 'The image helper is part of the HyperFlux desktop app.';
     return;
@@ -3810,6 +3883,29 @@ function renderHelperSettings() {
   button.textContent = imageHelper.needs_download ? 'Download and turn on image helper' : 'Turn on image helper';
   button.disabled = hardware.ok === false;
   button.hidden = false;
+}
+
+// Only offered on a PC that has integrated graphics. Applied as soon as it's chosen.
+function renderHelperRunner() {
+  var row = $('helperRunnerRow');
+  if (!row) return;
+  var name = !imageHelper.unavailable && imageHelper.integrated_gpu;
+  row.hidden = !name;
+  if (!name) return;
+  var select = $('helperRunnerSetting');
+  if (document.activeElement !== select) select.value = imageHelper.runner || 'cpu';
+  select.options[1].textContent = 'Integrated graphics (' + name + ')';
+  $('helperRunnerHint').textContent = imageHelper.runner === 'igpu'
+    ? 'The picture reader runs on ' + name + ' and the rest on the processor. If the helper fails or answers oddly, switch back to the processor.'
+    : 'The processor was faster in our test (12\u201315 s a picture against 22\u201325 s on an Intel UHD 630 that was also busy with other programs). Yours may differ, so try both.';
+}
+
+async function setHelperRunner(runner) {
+  var result = await postHelper('runner-' + runner);
+  if (!result) window.alert('Could not reach the HyperFlux desktop service.');
+  else if (result.accepted === false) window.alert(result.message);
+  $('helperRunnerSetting').blur();
+  refreshImageHelper();
 }
 
 async function toggleImageHelper() {
@@ -4386,6 +4482,7 @@ var HF = (function(){
     closeThemes: function(){ this.closeSettings(); },
     openSettings: function(tab){
       refreshSettingsForm();
+      refreshSpeedSettings();
       refreshPersonalizationForm();
       refreshThemePicker();
       setSettingsNote('');
@@ -4422,6 +4519,7 @@ var HF = (function(){
     resetModelSettings: function(){
       $('temperatureSetting').value = presetTemperature() !== null ? presetTemperature() : DEFAULT_TEMPERATURE;
       $('lengthSetting').value = 4096;
+      $('picturesSetting').value = 'auto';
       $('contextSetting').value = Math.min(16384, serverMaxContext || 16384);
       updateTemperatureLabel();
       setSettingsNote('Recommended values set. Click Save to keep them.');
@@ -4458,6 +4556,7 @@ var HF = (function(){
       var accentColor = $('accentCustomSetting').checked ? $('accentSetting').value : '';
       modelSettings = {temperature: temperature, maxLength: maxLength, contextLength: contextLength, version: MODEL_SETTINGS_VERSION};
       persistModelSettings();
+      applySpeedSettings($('picturesSetting').value, contextLength);
       personalization = {
         displayName: $('displayNameSetting').value.trim().slice(0, 32),
         accentColor: /^#[0-9a-f]{6}$/i.test(accentColor) ? accentColor : '',
@@ -4476,6 +4575,7 @@ var HF = (function(){
     },
     enableVision: enableVision,
     toggleImageHelper: toggleImageHelper,
+    setHelperRunner: setHelperRunner,
     showUpdate: function(){ if (updateInfo && updateInfo.available) showUpdateModal(); },
     updateLater: function(){
       // The card in the sidebar keeps offering it until it's installed or skipped.

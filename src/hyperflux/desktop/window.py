@@ -29,6 +29,7 @@ from hyperflux.desktop.process_tree import descendant_pids, terminate_pid
 from hyperflux.desktop.runtime_assets import save_config, vision_file_for
 from hyperflux.desktop.update_bar import UpdateBar
 from hyperflux.desktop.image_helper import ImageHelper
+from hyperflux.desktop.performance import Performance
 from hyperflux.desktop.vision import VisionInstaller
 from hyperflux.search.bridge import load_or_create_token
 from hyperflux.paths import (
@@ -56,6 +57,7 @@ def apply_page_settings(page):
 
 class HyperFluxWindow(QMainWindow):
     service_error = Signal(str)
+    speed_restart_requested = Signal()  # the page changed how the server should start
 
     def __init__(self, runtime_config=None, check_updates=False):
         super().__init__()
@@ -69,6 +71,7 @@ class HyperFluxWindow(QMainWindow):
         self.local_models = None
         self.vision = None
         self.image_helper = None
+        self.performance = None
         self._helper_process = None
         self._helper_timer = None
         self._check_updates = check_updates
@@ -192,6 +195,13 @@ class HyperFluxWindow(QMainWindow):
             )
 
     def _start_local_services(self):
+        # Speed settings decide how the server is started, so they come first.
+        self.performance = Performance(
+            has_vision=lambda: vision_file_for(self.runtime_config["model_path"]) is not None,
+            can_restart=lambda: self._kobold_process is not None,
+            restart=self.speed_restart_requested.emit,
+        )
+        self.speed_restart_requested.connect(self._restart_kobold)
         model_socket = QTcpSocket(self)
         model_socket.connectToHost("127.0.0.1", 5001)
         model_running = model_socket.waitForConnected(250)
@@ -216,6 +226,7 @@ class HyperFluxWindow(QMainWindow):
         # The image helper: a second, small server that looks at pictures for models that can't.
         self.image_helper = ImageHelper(
             main_model_is_vision=lambda: vision_file_for(self.runtime_config["model_path"]) is not None,
+            main_model=lambda: self.runtime_config["model_path"],
             parent=self,
         )
         self.image_helper.start_requested.connect(self._start_helper)
@@ -248,6 +259,10 @@ class HyperFluxWindow(QMainWindow):
         vision_file = vision_file_for(model)  # image input, once its file is downloaded
         if vision_file is not None:
             arguments += ["--mmproj", str(vision_file)]
+            # This model sees pictures itself, so an image helper would only take memory.
+            if self.image_helper is not None:
+                self._stop_helper()
+        arguments += self.performance.launch_arguments()
         self._kobold_process.start(executable, arguments)
         if self._kobold_process.state() == QProcess.ProcessState.NotRunning:
             self._kobold_alive = False
@@ -277,7 +292,7 @@ class HyperFluxWindow(QMainWindow):
 
     def _helper_finished(self, process):
         if process is self._helper_process and not self._shutting_down:
-            self.image_helper.set_running(False)
+            self.image_helper.process_exited()
 
     def _stop_helper(self):
         process = self._helper_process
@@ -379,6 +394,7 @@ class HyperFluxWindow(QMainWindow):
                 model_manager=self.local_models,
                 vision_manager=self.vision,
                 image_helper=self.image_helper,
+                performance_manager=self.performance,
                 # The page asks about updates (popup, then a sidebar card) through the bridge.
                 update_manager=self.update_bar if self._check_updates else None,
             )
