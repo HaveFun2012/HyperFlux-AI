@@ -866,6 +866,12 @@ body.style-modern .send-btn,body.style-modern .go-btn{background:var(--ac);color
             <option value="pictures">Faster pictures, slower chat</option>
           </select>
           <span class="setting-hint" id="speedHint"></span>
+          <label for="layersSetting">GPU layers</label>
+          <select id="layersSetting">
+            <option value="auto">Automatic (safest)</option>
+            <option value="speed">More speed</option>
+          </select>
+          <span class="setting-hint" id="layersHint"></span>
         </div>
         <button class="link-btn" type="button" onclick="HF.resetModelSettings()"><i class="fas fa-rotate-left" aria-hidden="true"></i> Reset to recommended</button>
       </div>
@@ -1473,6 +1479,19 @@ var lightThemeNames = [
 var personalization = loadPersonalization();
 var currentReleaseIndex = 0;
 var releaseNotes = [
+  {
+    title: 'New in HyperFlux 1.2.3',
+    badge: 'Video \u00b7 Speed',
+    footer: 'HYPERFLUX 1.2.3 \u00b7 VIDEO AND SPEED',
+    features: [
+      'Videos (experimental): attach one and ask about it. HyperFlux looks at a few still frames; it can\u2019t hear the sound.',
+      'Faster chat on 4 GB graphics cards: the picture reader now runs on the processor (pictures take a little longer).',
+      'Settings \u2192 Model: choose faster chat or faster pictures, and optionally More speed for the recommended E4B.',
+      'The image helper can run on integrated graphics, and isn\u2019t loaded when your model already sees pictures.',
+      'Deleting a chat now asks first.',
+      'The update card no longer covers Settings and Appearance.'
+    ]
+  },
   {
     title: 'New in HyperFlux 1.2',
     badge: 'Settings',
@@ -3755,6 +3774,10 @@ async function refreshSpeedSettings() {
   if (!speedInfo || speedInfo.unavailable) { speedInfo = null; row.hidden = true; return; }
   row.hidden = false;
   $('picturesSetting').value = speedInfo.pictures;
+  $('layersSetting').value = speedInfo.layers || 'auto';
+  $('layersHint').textContent = 'More speed puts 36 layers of the model on the graphics card. In our test on a 4 GB card it wrote about 44% faster. ' +
+    'It leaves less video memory for other programs; if replies get slower, or a game needs the card, switch back to Automatic.' +
+    (speedInfo.speed_blocker ? ' With the settings saved now it has no effect: ' + speedInfo.speed_blocker + '.' : '');
   $('speedHint').textContent = (speedInfo.has_vision
     ? 'Right now the picture reader runs on the ' + (speedInfo.vision_on_cpu ? 'processor, which leaves the graphics card to the model.' : 'graphics card.') +
       ' On a 4 GB card, keeping it off the card made chat faster and each picture about 5 seconds slower in our test.'
@@ -3763,10 +3786,10 @@ async function refreshSpeedSettings() {
     (speedInfo.can_restart ? '' : ' HyperFlux didn\u2019t start this server, so restart it yourself to apply changes.');
 }
 
-async function applySpeedSettings(pictures, context) {
+async function applySpeedSettings(pictures, layers, context) {
   if (!speedInfo) return;
   context = Math.max(4096, context);
-  if (pictures === speedInfo.pictures && context === speedInfo.context) return;
+  if (pictures === speedInfo.pictures && layers === speedInfo.layers && context === speedInfo.context) return;
   if (isGenerating) {
     window.alert('HyperFlux is still answering, so the speed settings weren\u2019t changed. Save again when it has finished.');
     return;
@@ -3774,11 +3797,12 @@ async function applySpeedSettings(pictures, context) {
   try {
     var response = await fetch(bridgeUrl('/performance'), {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({pictures: pictures, context: context})
+      body: JSON.stringify({pictures: pictures, context: context, layers: layers})
     });
     var data = await response.json();
     if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
     speedInfo.pictures = pictures;
+    speedInfo.layers = layers;
     speedInfo.context = context;
     if (data.restarting) {
       serverMaxContext = null;  // the reloaded server may allow a different amount
@@ -4520,6 +4544,7 @@ var HF = (function(){
       $('temperatureSetting').value = presetTemperature() !== null ? presetTemperature() : DEFAULT_TEMPERATURE;
       $('lengthSetting').value = 4096;
       $('picturesSetting').value = 'auto';
+      $('layersSetting').value = 'auto';
       $('contextSetting').value = Math.min(16384, serverMaxContext || 16384);
       updateTemperatureLabel();
       setSettingsNote('Recommended values set. Click Save to keep them.');
@@ -4556,7 +4581,7 @@ var HF = (function(){
       var accentColor = $('accentCustomSetting').checked ? $('accentSetting').value : '';
       modelSettings = {temperature: temperature, maxLength: maxLength, contextLength: contextLength, version: MODEL_SETTINGS_VERSION};
       persistModelSettings();
-      applySpeedSettings($('picturesSetting').value, contextLength);
+      applySpeedSettings($('picturesSetting').value, $('layersSetting').value, contextLength);
       personalization = {
         displayName: $('displayNameSetting').value.trim().slice(0, 32),
         accentColor: /^#[0-9a-f]{6}$/i.test(accentColor) ? accentColor : '',

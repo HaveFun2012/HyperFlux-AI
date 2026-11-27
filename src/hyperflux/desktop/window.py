@@ -200,6 +200,7 @@ class HyperFluxWindow(QMainWindow):
             has_vision=lambda: vision_file_for(self.runtime_config["model_path"]) is not None,
             can_restart=lambda: self._kobold_process is not None,
             restart=self.speed_restart_requested.emit,
+            model=lambda: self.runtime_config["model_path"],
         )
         self.speed_restart_requested.connect(self._restart_kobold)
         model_socket = QTcpSocket(self)
@@ -357,7 +358,16 @@ class HyperFluxWindow(QMainWindow):
     def _kobold_finished(self, exit_code, _status):
         if self.sender() is self._kobold_process:  # not an old, replaced process
             self._kobold_alive = False
-        if self._shutting_down or self._restarting_kobold or exit_code == 0:
+        if self._shutting_down or self._restarting_kobold:
+            return
+        if self.sender() is self._kobold_process and self.performance.fall_back():
+            self.service_error.emit(
+                "The model server stopped with the extra graphics layers (More speed), so HyperFlux "
+                "switched GPU layers back to Automatic and is loading the model again."
+            )
+            QTimer.singleShot(0, self._restart_kobold)
+            return
+        if exit_code == 0:
             return
         self.service_error.emit(
             f"KoboldCpp stopped unexpectedly (exit code {exit_code}). See {KOBOLD_LOG_PATH}."

@@ -291,7 +291,8 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
         self._send_json(200, {"query": optimized_query, "results": results})
 
     def _save_performance(self):
-        """/performance {pictures: auto|chat|pictures, context: int} -> {restarting, changed}"""
+        """/performance {pictures: auto|chat|pictures, context: int, layers: auto|speed}
+        -> {restarting, changed}"""
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -311,7 +312,7 @@ class _SearchBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Send pictures and context."})
             return
         try:
-            self._send_json(200, self.performance_manager.update(pictures, context))
+            self._send_json(200, self.performance_manager.update(pictures, context, data.get("layers", "auto")))
         except OSError as error:
             self._send_json(500, {"error": f"The settings could not be saved: {error}"})
 

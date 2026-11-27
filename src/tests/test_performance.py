@@ -34,7 +34,24 @@ class LaunchArgumentTests(unittest.TestCase):
     def test_bad_saved_values_fall_back_safely(self):
         for context in (None, 12, 10**9, "8192", True, 8192.5):
             self.assertIsNone(performance.clean_settings("auto", context)["context"], context)
-        self.assertEqual(performance.clean_settings("--evil", 8192), {"pictures": "auto", "context": 8192})
+        self.assertEqual(performance.clean_settings("--evil", 8192, "--x"),
+                         {"pictures": "auto", "context": 8192, "layers": "auto"})
+
+    def test_more_speed_applies_only_where_it_was_measured(self):
+        def forced(pictures="auto", context=8096, vision=True, vram=4096, tuned=True, layers="speed"):
+            settings = {"pictures": pictures, "context": context, "layers": layers}
+            return "--gpulayers" in performance.launch_arguments(settings, vision, vram, tuned)
+
+        self.assertTrue(forced())
+        self.assertTrue(forced(vision=False))
+        self.assertFalse(forced(layers="auto"))
+        self.assertFalse(forced(tuned=False))             # another model
+        self.assertFalse(forced(vram=8192))               # another card
+        self.assertFalse(forced(vram=2048))
+        self.assertFalse(forced(vram=None))
+        self.assertFalse(forced(pictures="pictures"))     # the vision file would be on the card too
+        self.assertFalse(forced(context=16384))
+        self.assertFalse(forced(context=None))            # the server's own default is 16K
 
 
 class ReloadTests(unittest.TestCase):
@@ -61,6 +78,16 @@ class ReloadTests(unittest.TestCase):
         self.assertTrue(self.control.update("pictures", 8192)["restarting"])
         self.assertEqual(len(self.reloads), 2)
         self.assertEqual(self.control.launch_arguments(), ["--contextsize", "8192"])
+
+    def test_a_server_that_stops_with_extra_layers_goes_back_to_automatic(self):
+        with patch.object(performance.assets, "recommended_temperature", return_value=0.5):
+            self.control._model = lambda: "model.gguf"
+            self.control.update("auto", 8192, "speed")
+            self.assertIn("--gpulayers", self.control.launch_arguments())
+            self.assertTrue(self.control.fall_back())
+            self.assertNotIn("--gpulayers", self.control.launch_arguments())
+            self.assertEqual(self.control.describe()["layers"], "auto")
+            self.assertFalse(self.control.fall_back())  # an ordinary crash is not retried
 
     def test_a_server_hyperflux_did_not_start_is_left_alone(self):
         self.control._can_restart = lambda: False
