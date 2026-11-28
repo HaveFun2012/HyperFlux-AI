@@ -4,7 +4,7 @@ The release workflow refuses to build if the tag and this value differ, and the
 in-app updater compares it with the newest GitHub release.
 """
 
-__version__ = "1.2.3"
+__version__ = "1.2.2"
 
 # Where releases are published, for the update check.
 GITHUB_REPO = "HaveFun2012/HyperFlux-AI"
