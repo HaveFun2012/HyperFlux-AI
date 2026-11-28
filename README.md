@@ -94,6 +94,14 @@ These are practical guidelines, not tested limits.
 
 For download sizes and free space, see [Download and disk-space estimate](#download-and-disk-space-estimate).
 
+### Windows security
+
+HyperFlux builds are currently unsigned, so Windows may warn about or block them. Download the installer only from this project's GitHub releases.
+
+- If **SmartScreen** appears ("Windows protected your PC") and you downloaded the installer from those releases, you may be able to choose **More info → Run anyway**.
+- If **Smart App Control** blocks HyperFlux, please don't turn that protection off just for HyperFlux. Some PCs with it on may be unable to run HyperFlux for now.
+- On a work or school PC, ask your IT team.
+
 ## Setup
 
 On Windows 10 or 11, with PowerShell and internet access:
