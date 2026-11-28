@@ -80,6 +80,20 @@ Downloaded assets are intentionally ignored by Git:
 
 The GGUF is a local model file, not tracked or included in releases. Setup checks its GGUF signature and preserves it; it does not fetch or replace model weights. Review the model provider's terms and the GGUF source's terms before use or redistribution.
 
+## System requirements
+
+These are practical guidelines, not tested limits.
+
+| | Minimum | Recommended |
+| :--- | :--- | :--- |
+| System | Windows 10 or 11, 64-bit | Windows 11, 64-bit |
+| RAM | 8 GB (use Gemma 4 E2B) | 16 GB (for Gemma 4 E4B or the image helper) |
+| Graphics | Not required, but replies will be slower | NVIDIA GPU with 4 GB of VRAM or more |
+
+**Speed optimisations** are mainly for NVIDIA GPUs with 4 GB of VRAM, such as 4 GB GTX 10 Series cards or others. What counts is the amount of VRAM, not the series: a GTX 10 Series card with 6 GB or 8 GB doesn't get them automatically. **More speed** also needs the recommended Gemma 4 E4B and a conversation memory of 8,192 or less. They have been tested only on a GTX 1050 4 GB with an i7-8750H and 8 GB of RAM, so results on other PCs may differ.
+
+For download sizes and free space, see [Download and disk-space estimate](#download-and-disk-space-estimate).
+
 ## Setup
 
 On Windows 10 or 11, with PowerShell and internet access:
