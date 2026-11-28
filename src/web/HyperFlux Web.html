@@ -1488,6 +1488,7 @@ var releaseNotes = [
       'Faster chat on 4 GB graphics cards: the picture reader now runs on the processor (pictures take a little longer).',
       'Settings \u2192 Model: choose faster chat or faster pictures, and optionally More speed for the recommended E4B.',
       'The image helper can run on integrated graphics, and isn\u2019t loaded when your model already sees pictures.',
+      'Ask HyperFlux what it can do: it now knows the app\u2019s features and what your current setup supports.',
       'Deleting a chat now asks first.',
       'The update card no longer covers Settings and Appearance.'
     ]
@@ -2426,6 +2427,60 @@ function styleExamples(model) {
   return lines.join('\n') + '\n';
 }
 
+// ---- What the model knows about the app ---------------------------------------------------------
+// The model can't see the app it runs in. Every prompt gets one line; the full guide is added only
+// when the user asks about HyperFlux, so ordinary chats don't pay for it in context or speed.
+// Keep it true: when a feature changes, change it here too.
+var APP_LINE = "You run inside the HyperFlux app on the user's own PC. If you aren't told that the app has a feature, don't claim it does.";
+var ABOUT_APP_QUESTION = /\bhyper\s?flux\b|\bthis (app|application)\b|\bwhat (else )?can you do\b|\bwhat are you (able to do|capable of)\b|\byour (features?|abilities|capabilities|settings|commands)\b|\b(can|could|do|does|are) you (able to )?(see|read|watch|view|hear|listen|open|search|browse|remember|export|speak|talk)\b|\b(slash commands?|image helper|more speed|gpu layers|conversation memory|read aloud)\b|\bhow (do|can) i\b[^.?!]*\b(attach|upload|(delete|export|search) (a |my |this |all |the )?chats?|(change|switch) (the )?(theme|persona|model|temperature))\b/i;
+// Narrower: clearly about HyperFlux itself, so searching the web for it would only mislead.
+var ABOUT_HYPERFLUX = /\bhyper\s?flux\b|\bwhat (else )?can you do\b|\bwhat are you (able to do|capable of)\b|\byour (features?|abilities|capabilities|commands)\b/i;
+
+function asksAboutApp(question, messages) {
+  if (ABOUT_APP_QUESTION.test(question)) return true;
+  // a short follow-up ("how do I turn it on?") to a question about the app
+  if (String(question).trim().split(/\s+/).length > 12) return false;
+  for (var i = (messages || []).length - 1; i >= 0; i--) {
+    var message = messages[i];
+    if (message && !message.runtime && message.role === 'user') return ABOUT_APP_QUESTION.test(String(message.content || ''));
+  }
+  return false;
+}
+
+function skipsResearchForApp(prompt) {
+  return ABOUT_HYPERFLUX.test(prompt) && !/^\s*(search:|web:|\/search\s)|\b(search|look up|google|news)\b/i.test(prompt);
+}
+
+// What is true right now comes first: the model must not claim to see or do what this setup can't.
+function appGuide() {
+  var desktop = !!bridgeToken();
+  var helperOn = !imageHelper.unavailable && !!imageHelper.enabled;
+  var seeing = visionReady
+    ? 'The loaded model can see pictures itself.'
+    : desktop
+      ? 'The loaded model cannot see pictures. HyperFlux can read the text in a picture with Windows OCR' +
+        (helperOn ? ', and the image helper (a second small model) can describe what is in it.' : '. Describing what is in a picture needs the image helper, which is off (Settings > Voice & pictures).')
+      : 'Picture input is not available right now.';
+  var lines = [
+    'APP GUIDE (facts about HyperFlux, the app you run in. Use it to answer questions about the app; give only the part asked for. If something is not listed, say you don\'t know of such a feature.)',
+    'Right now: ' + (desktop ? 'desktop app' : 'opened in a web browser, so desktop-only features (videos, OCR, image helper, speed settings, model switching, updates) are unavailable') +
+      (serverModelName ? ', model file ' + String(serverModelName).replace(/^koboldcpp\//, '') : '') + '. ' + seeing,
+    '- Runs a local model on this PC; chats are saved on this PC. Web search goes online when a question needs current facts, or with /search.',
+    '- Modes: Flash 1 (fast, never thinks), Apex 1 (default, Think button), Horizon 1 (always thinks). Pick them beside the message box.',
+    '- Paperclip: pictures (with a crop tool), text or code files (first 3,000 characters only; no PDF or Word reading)' +
+      (desktop ? ', and videos (experimental: a few still frames; no sound, no motion between frames).' : '.'),
+    '- Read aloud button under answers; Copy and Retry; Edit your last message; Stop.',
+    '- Chats: search box or Ctrl+K; download icon or /export saves a chat as Markdown; the X deletes a chat after asking.',
+    '- Commands: ' + SLASH_COMMANDS.map(function(item) { return item.cmd; }).join(' ') + '.',
+    '- Settings tabs: Personal (name, custom instructions, personas Default, Tutor, Coder, Concise, Friendly), Model (temperature, longest answer, conversation memory' +
+      (desktop ? ', Pictures or chat speed, GPU layers with More speed' : '') + '), Appearance (themes, accent colour, text size, Modern or Legacy style), Voice & pictures (read-aloud voice' +
+      (desktop ? ', image input, image helper and what it runs on' : '') + '), About.',
+    desktop ? '- Switch between model files on this PC from the model menu. The app offers updates when a new version is released.' : '',
+    '- It cannot hear audio, create images, control other programs, or send messages or email.'
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
 // intentText: what the user typed, when `prompt` is a longer prompt the app built around it
 // (e.g. answering from web sources); the riddle check must only look at the user's words.
 function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelId, intentText) {
@@ -2438,7 +2493,7 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
     MODEL_LINEUP + ' The active model is ' + model.name + '.',
     "Mention the active model name (" + model.short + ") only if the user asks which model is active. Do not claim one HyperFlux model is smarter than another; explain the difference only as speed, thinking and answer length.",
     "Do not append a sign-off, signature, assistant name, or model name to your answers.",
-    "The desktop and terminal apps have separate conversation histories. Never claim to remember messages from the other app unless they are included here.",
+    "Never claim to remember other chats; you only know the messages included here.",
   ].concat(model.style, personaRules(), MODEL_COMMON_STYLE, [
     "For complex or high-stakes questions, reason carefully before answering: identify the goal, break the problem into steps, check assumptions and calculations, compare relevant alternatives, and verify the conclusion. In the answer, present the result and a clear explanation of the key steps.",
     "Web search is provided by the local HyperFlux search bridge. Never say a web search was performed unless live search results are included in this prompt.",
@@ -2457,6 +2512,7 @@ function buildSessionPrompt(messages, prompt, attachment, thinkingExempt, modelI
     systemInstruction += '\n' + (thinkingExempt ? ASK_NOT_TO_THINK : ASK_TO_THINK);
   }
   var intent = String(intentText || prompt);
+  systemInstruction += '\n' + (asksAboutApp(intent, messages) ? appGuide() : APP_LINE);
   if (REALITY_CHECK_PATTERN.test(intent)) {
     systemInstruction += '\n' + [REALITY_CHECK_HINT].concat(nameWordNotes(intent)).join('\n');
   }
@@ -4865,7 +4921,7 @@ var HF = (function(){
           await readVideo(attachment, prompt, statusNode, requestController.signal);
         }
         // Research first when the question needs current or specific facts (pictures are answered as-is).
-        var research = attachment ? null : await startResearch(prompt, statusNode, requestController.signal, null);
+        var research = attachment || skipsResearchForApp(prompt) ? null : await startResearch(prompt, statusNode, requestController.signal, null);
         if (research) modelPrompt = research.prompt;
         for (var researchRound = 1; ; researchRound++) {
         if (requestController.signal.aborted) throw new DOMException('Stopped', 'AbortError');
