@@ -1,0 +1,9 @@
+New problem:
+1. The model itself doesn't know that it is inside the HyperFlux App and also doesn't now it's current features.
+
+That's all for now, still testing HyperFlux.
+
+Current features that suceed:
+1. "More speed" feature for faster text generation.
+2. Optimised second image helper
+3. Short, mobile landscape video worked.

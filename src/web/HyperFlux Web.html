@@ -3920,8 +3920,8 @@ function renderHelperRunner() {
   if (document.activeElement !== select) select.value = imageHelper.runner || 'cpu';
   select.options[1].textContent = 'Integrated graphics (' + name + ')';
   $('helperRunnerHint').textContent = imageHelper.runner === 'igpu'
-    ? 'The picture reader runs on ' + name + ' and the rest on the processor. If the helper fails or answers oddly, switch back to the processor.'
-    : 'The processor was faster in our test (12\u201315 s a picture against 22\u201325 s on an Intel UHD 630 that was also busy with other programs). Yours may differ, so try both.';
+    ? 'The picture reader runs on ' + name + ' and the rest on the processor. The same chip usually draws your desktop, so Windows and other apps can lag while it reads a picture. If that happens, or the helper fails or answers oddly, switch back to the processor.'
+    : 'Recommended. Integrated graphics usually draws your desktop too, so using it for the helper can make Windows and other apps lag. In our test it was also slower (22\u201325 s a picture against 12\u201315 s on an Intel UHD 630 that was busy with other programs).';
 }
 
 async function setHelperRunner(runner) {
